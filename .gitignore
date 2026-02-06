@@ -1,4 +1,5 @@
 bin/
+dist/
 todo
 *.exe
 .todo.toml
