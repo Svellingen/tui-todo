@@ -274,18 +274,57 @@ func (m TaskListModel) FilterIndicator() string {
 	return "[" + strings.Join(parts, " ") + "]"
 }
 
+// ProgressString returns a "done/total done" progress string.
+func (m TaskListModel) ProgressString() string {
+	if m.taskFile == nil {
+		return ""
+	}
+	total := len(m.taskFile.Tasks)
+	if total == 0 {
+		return ""
+	}
+	done := 0
+	for _, t := range m.taskFile.Tasks {
+		if t.Status == task.StatusDone {
+			done++
+		}
+	}
+	return fmt.Sprintf("%d/%d done", done, total)
+}
+
 // View renders the task list.
 func (m TaskListModel) View() string {
-	if m.taskFile == nil || len(m.items) == 0 {
-		return ui.HelpBar.Render("No tasks. Press 'a' to add one.")
+	if m.taskFile == nil || len(m.taskFile.Tasks) == 0 {
+		return "\n\n" + ui.HelpBar.Render("    No tasks yet. Press 'a' to add one.") + "\n\n"
+	}
+
+	// Check if all tasks are filtered out
+	hasVisibleTasks := false
+	for _, it := range m.items {
+		if it.kind == itemTask {
+			hasVisibleTasks = true
+			break
+		}
+	}
+	if !hasVisibleTasks {
+		return "\n" + ui.HelpBar.Render("    No matching tasks.") + "\n"
 	}
 
 	var sb strings.Builder
 
-	// Filter indicator
+	// Header line: filter indicator + progress
+	header := ""
 	if indicator := m.FilterIndicator(); indicator != "" {
-		sb.WriteString(ui.Tag.Render(indicator))
-		sb.WriteByte('\n')
+		header = ui.Tag.Render(indicator)
+	}
+	if progress := m.ProgressString(); progress != "" {
+		if header != "" {
+			header += "  "
+		}
+		header += ui.Progress.Render(progress)
+	}
+	if header != "" {
+		sb.WriteString(header + "\n")
 	}
 
 	for i, it := range m.items {

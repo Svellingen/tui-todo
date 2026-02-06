@@ -22,6 +22,7 @@ const (
 	modeInput          // text input active (add/edit/search/tag)
 	modeConfirmDelete  // waiting for y/n on delete
 	modeTagSelect      // picking a tag to filter by
+	modeHelp           // help overlay visible
 )
 
 // undoEntry stores a snapshot of the task file for undo.
@@ -146,6 +147,15 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle help mode
+	if a.mode == modeHelp {
+		switch key {
+		case ui.KeyHelp, "esc":
+			a.mode = modeNormal
+		}
+		return a, nil
+	}
+
 	// Handle tag selection mode
 	if a.mode == modeTagSelect {
 		switch key {
@@ -236,6 +246,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.addTag()
 	case ui.KeyFilterTag:
 		return a.openTagFilter()
+	case ui.KeyHelp:
+		a.mode = modeHelp
+		return a, nil
 	}
 
 	return a, nil
@@ -519,6 +532,11 @@ func (a App) View() string {
 	}
 	if a.taskFile == nil {
 		return "Loading..."
+	}
+
+	// Help overlay
+	if a.mode == modeHelp {
+		return ui.HelpOverlay.Render(helpText())
 	}
 
 	var sb strings.Builder
