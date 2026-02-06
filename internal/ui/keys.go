@@ -8,6 +8,13 @@ const (
 	KeySectionUp   = "K"
 	KeySectionDown = "J"
 
-	KeyQuit = "q"
-	KeyHelp = "?"
+	KeyQuit   = "q"
+	KeyHelp   = "?"
+	KeyDone   = "d"
+	KeyAdd    = "a"
+	KeyEdit   = "e"
+	KeyDelete = "x"
+	KeyStatus = "s"
+	KeyPrio   = "p"
+	KeyUndo   = "u"
 )

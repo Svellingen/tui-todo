@@ -220,7 +220,7 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	return "  " + line
 }
 
-// SelectedTask returns the currently selected task, or nil if none.
+// SelectedTaskItem returns the currently selected task, or nil if none.
 func (m TaskListModel) SelectedTaskItem() *task.Task {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
 		return nil
@@ -230,4 +230,17 @@ func (m TaskListModel) SelectedTaskItem() *task.Task {
 		return nil
 	}
 	return &m.taskFile.Tasks[it.taskIndex]
+}
+
+// SelectedTaskIndex returns the index into TaskFile.Tasks for the selected item,
+// or -1 if no task is selected.
+func (m TaskListModel) SelectedTaskIndex() int {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return -1
+	}
+	it := m.items[m.cursor]
+	if it.kind != itemTask {
+		return -1
+	}
+	return it.taskIndex
 }

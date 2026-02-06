@@ -153,15 +153,15 @@ func parseTaskLine(trimmed string, sectionStatus task.Status, lineNum int, raw s
 	}
 
 	// Parse metadata from rest of line
-	t.Title, t.Priority, t.Tags, t.DueDate = parseMetadata(rest)
+	t.Title, t.Priority, t.Tags, t.DueDate = ParseMetadata(rest)
 
 	return t, true
 }
 
-// parseMetadata extracts title, priority, tags, and due date from task text.
+// ParseMetadata extracts title, priority, tags, and due date from task text.
 // The title is everything before the first metadata token.
 // Metadata tokens: priority:X, +tag, @context, due:YYYY-MM-DD, created:YYYY-MM-DD, done:YYYY-MM-DD
-func parseMetadata(text string) (title string, priority task.Priority, tags []string, dueDate *time.Time) {
+func ParseMetadata(text string) (title string, priority task.Priority, tags []string, dueDate *time.Time) {
 	words := strings.Fields(text)
 	var titleWords []string
 
