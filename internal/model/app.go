@@ -19,8 +19,9 @@ type appMode int
 
 const (
 	modeNormal appMode = iota
-	modeInput          // text input active (add/edit)
+	modeInput          // text input active (add/edit/search/tag)
 	modeConfirmDelete  // waiting for y/n on delete
+	modeTagSelect      // picking a tag to filter by
 )
 
 // undoEntry stores a snapshot of the task file for undo.
@@ -43,8 +44,10 @@ type App struct {
 	height   int
 	err      error
 
-	undoStack []undoEntry
-	statusMsg string // temporary message shown in help bar
+	undoStack  []undoEntry
+	statusMsg  string // temporary message shown in help bar
+	tagOptions []string // tag list for tag-filter selection
+	tagCursor  int      // cursor in tag selection
 }
 
 // NewApp creates a new App model with the given store.
@@ -143,17 +146,48 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle tag selection mode
+	if a.mode == modeTagSelect {
+		switch key {
+		case ui.KeyDown:
+			if a.tagCursor < len(a.tagOptions)-1 {
+				a.tagCursor++
+			}
+		case ui.KeyUp:
+			if a.tagCursor > 0 {
+				a.tagCursor--
+			}
+		case "enter":
+			if a.tagCursor >= 0 && a.tagCursor < len(a.tagOptions) {
+				a.list.SetTagFilter(a.tagOptions[a.tagCursor])
+			}
+			a.mode = modeNormal
+			a.tagOptions = nil
+		case "esc":
+			a.mode = modeNormal
+			a.tagOptions = nil
+		}
+		return a, nil
+	}
+
 	// Handle text input mode
 	if a.mode == modeInput {
 		switch key {
 		case "enter":
 			return a.commitInput()
 		case "esc":
+			if a.input.Mode() == inputSearch {
+				a.list.ClearSearch()
+			}
 			a.input.Cancel()
 			a.mode = modeNormal
 			return a, nil
 		default:
 			cmd := a.input.Update(msg)
+			// Live search filtering
+			if a.input.Mode() == inputSearch {
+				a.list.SetSearchQuery(a.input.Value())
+			}
 			return a, cmd
 		}
 	}
@@ -188,6 +222,20 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.cyclePriority()
 	case ui.KeyUndo:
 		return a.undo()
+	case ui.KeyFilterAll:
+		a.list.SetStatusFilter(filterAll)
+	case ui.KeyFilterActive:
+		a.list.SetStatusFilter(filterActive)
+	case ui.KeyFilterDone:
+		a.list.SetStatusFilter(filterDone)
+	case ui.KeySearch:
+		a.mode = modeInput
+		a.input.StartSearch()
+		return a, nil
+	case ui.KeyTag:
+		return a.addTag()
+	case ui.KeyFilterTag:
+		return a.openTagFilter()
 	}
 
 	return a, nil
@@ -243,7 +291,6 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 	case inputEdit:
 		idx := a.input.EditIndex()
 		if idx >= 0 && idx < len(a.taskFile.Tasks) {
-			// Parse metadata from the edited value
 			title, priority, tags, dueDate := storage.ParseMetadata(value)
 			a.taskFile.Tasks[idx].Title = title
 			if priority != task.PriorityNone {
@@ -255,6 +302,23 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 			if dueDate != nil {
 				a.taskFile.Tasks[idx].DueDate = dueDate
 			}
+		}
+		a.input.Cancel()
+		a.mode = modeNormal
+		return a, a.save()
+
+	case inputSearch:
+		// Lock the current search filter
+		a.input.Cancel()
+		a.mode = modeNormal
+		return a, nil
+
+	case inputTag:
+		// Add tag to selected task
+		idx := a.list.SelectedTaskIndex()
+		if idx >= 0 && idx < len(a.taskFile.Tasks) {
+			a.pushUndo("add tag")
+			a.taskFile.Tasks[idx].Tags = append(a.taskFile.Tasks[idx].Tags, value)
 		}
 		a.input.Cancel()
 		a.mode = modeNormal
@@ -358,6 +422,34 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	return a, tea.Batch(a.save(), cmd)
 }
 
+func (a App) addTag() (tea.Model, tea.Cmd) {
+	if a.list.SelectedTaskItem() == nil {
+		return a, nil
+	}
+	a.mode = modeInput
+	a.input.StartTag()
+	return a, nil
+}
+
+func (a App) openTagFilter() (tea.Model, tea.Cmd) {
+	// If already filtering by tag, clear it
+	if a.list.TagFilter() != "" {
+		a.list.ClearTagFilter()
+		return a, nil
+	}
+
+	tags := a.list.AllTags()
+	if len(tags) == 0 {
+		a.statusMsg = "No tags found"
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return flashMsg{} })
+	}
+
+	a.mode = modeTagSelect
+	a.tagOptions = tags
+	a.tagCursor = 0
+	return a, nil
+}
+
 func (a App) cycleStatus() (tea.Model, tea.Cmd) {
 	t := a.list.SelectedTaskItem()
 	if t == nil {
@@ -434,11 +526,30 @@ func (a App) View() string {
 
 	// Show input if active
 	if a.mode == modeInput {
-		prefix := "Add: "
-		if a.input.Mode() == inputEdit {
+		var prefix string
+		switch a.input.Mode() {
+		case inputAdd:
+			prefix = "Add: "
+		case inputEdit:
 			prefix = "Edit: "
+		case inputSearch:
+			prefix = "/: "
+		case inputTag:
+			prefix = "Tag: "
 		}
 		sb.WriteString(prefix + a.input.View() + "\n")
+	}
+
+	// Show tag selector if active
+	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
+		sb.WriteString("Filter by tag:\n")
+		for i, tag := range a.tagOptions {
+			cursor := "  "
+			if i == a.tagCursor {
+				cursor = "> "
+			}
+			sb.WriteString(cursor + "+" + tag + "\n")
+		}
 	}
 
 	// Help/status bar
@@ -448,7 +559,7 @@ func (a App) View() string {
 	} else if a.mode == modeConfirmDelete {
 		helpText = "Delete? y/n"
 	} else {
-		helpText = "j/k: navigate  d: done  a: add  e: edit  x: delete  s: status  p: priority  u: undo  q: quit"
+		helpText = "j/k: move  d: done  a: add  e: edit  x: del  s: status  p: prio  /: search  f: tag filter  1/2/3: filter  q: quit"
 	}
 	sb.WriteString(ui.HelpBar.Render(helpText))
 

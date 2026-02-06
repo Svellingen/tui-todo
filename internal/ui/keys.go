@@ -17,4 +17,11 @@ const (
 	KeyStatus = "s"
 	KeyPrio   = "p"
 	KeyUndo   = "u"
+
+	KeyFilterAll    = "1"
+	KeyFilterActive = "2"
+	KeyFilterDone   = "3"
+	KeySearch       = "/"
+	KeyTag          = "t"
+	KeyFilterTag    = "f"
 )

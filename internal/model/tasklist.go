@@ -25,13 +25,25 @@ type item struct {
 	taskIndex int // index into TaskFile.Tasks
 }
 
+// statusFilter controls which tasks are shown.
+type statusFilter int
+
+const (
+	filterAll    statusFilter = iota // show everything
+	filterActive                     // Todo + InProgress
+	filterDone                       // Done only
+)
+
 // TaskListModel handles rendering and navigating the task list.
 type TaskListModel struct {
-	taskFile *storage.TaskFile
-	items    []item       // flattened list of renderable rows
-	cursor   int          // index into items (only stops on task rows)
-	width    int
-	height   int
+	taskFile     *storage.TaskFile
+	items        []item       // flattened list of renderable rows
+	cursor       int          // index into items (only stops on task rows)
+	width        int
+	height       int
+	statusFilter statusFilter
+	searchQuery  string // substring filter on title
+	tagFilter    string // filter by tag (empty = no filter)
 }
 
 // NewTaskListModel creates a TaskListModel from a TaskFile.
@@ -41,7 +53,8 @@ func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
 	return m
 }
 
-// rebuildItems creates the flat item list from the TaskFile's lines.
+// rebuildItems creates the flat item list from the TaskFile's lines,
+// applying any active filters.
 func (m *TaskListModel) rebuildItems() {
 	m.items = nil
 	for _, line := range m.taskFile.Lines {
@@ -49,15 +62,119 @@ func (m *TaskListModel) rebuildItems() {
 		case storage.LineSection:
 			m.items = append(m.items, item{kind: itemSection, section: line.Raw})
 		case storage.LineTask:
-			m.items = append(m.items, item{kind: itemTask, taskIndex: line.TaskIndex})
+			if m.taskVisible(line.TaskIndex) {
+				m.items = append(m.items, item{kind: itemTask, taskIndex: line.TaskIndex})
+			}
 		case storage.LineText:
 			m.items = append(m.items, item{kind: itemBlank})
 		}
 	}
-	// Position cursor on first task if possible
-	if m.cursor == 0 {
-		m.moveToNextTask(0)
+	// Reposition cursor on first visible task
+	m.cursor = 0
+	m.moveToNextTask(0)
+}
+
+// taskVisible returns whether a task passes all active filters.
+func (m *TaskListModel) taskVisible(idx int) bool {
+	if idx < 0 || idx >= len(m.taskFile.Tasks) {
+		return false
 	}
+	t := m.taskFile.Tasks[idx]
+
+	// Status filter
+	switch m.statusFilter {
+	case filterActive:
+		if t.Status == task.StatusDone {
+			return false
+		}
+	case filterDone:
+		if t.Status != task.StatusDone {
+			return false
+		}
+	}
+
+	// Search query filter
+	if m.searchQuery != "" {
+		if !strings.Contains(strings.ToLower(t.Title), strings.ToLower(m.searchQuery)) {
+			return false
+		}
+	}
+
+	// Tag filter
+	if m.tagFilter != "" {
+		found := false
+		for _, tag := range t.Tags {
+			if tag == m.tagFilter {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}
+
+// SetStatusFilter sets the status filter and rebuilds the item list.
+func (m *TaskListModel) SetStatusFilter(f statusFilter) {
+	m.statusFilter = f
+	m.rebuildItems()
+}
+
+// StatusFilter returns the current status filter.
+func (m TaskListModel) StatusFilter() statusFilter {
+	return m.statusFilter
+}
+
+// SetSearchQuery sets the search query and rebuilds the item list.
+func (m *TaskListModel) SetSearchQuery(q string) {
+	m.searchQuery = q
+	m.rebuildItems()
+}
+
+// ClearSearch clears the search query and rebuilds.
+func (m *TaskListModel) ClearSearch() {
+	m.searchQuery = ""
+	m.rebuildItems()
+}
+
+// SearchQuery returns the current search query.
+func (m TaskListModel) SearchQuery() string {
+	return m.searchQuery
+}
+
+// SetTagFilter sets the tag filter and rebuilds the item list.
+func (m *TaskListModel) SetTagFilter(tag string) {
+	m.tagFilter = tag
+	m.rebuildItems()
+}
+
+// ClearTagFilter clears the tag filter and rebuilds.
+func (m *TaskListModel) ClearTagFilter() {
+	m.tagFilter = ""
+	m.rebuildItems()
+}
+
+// TagFilter returns the current tag filter.
+func (m TaskListModel) TagFilter() string {
+	return m.tagFilter
+}
+
+// AllTags returns a deduplicated sorted list of all tags across all tasks.
+func (m TaskListModel) AllTags() []string {
+	seen := make(map[string]bool)
+	var tags []string
+	for _, t := range m.taskFile.Tasks {
+		for _, tag := range t.Tags {
+			if !seen[tag] {
+				seen[tag] = true
+				tags = append(tags, tag)
+			}
+		}
+	}
+	return tags
 }
 
 // moveToNextTask moves the cursor to the next task item at or after pos.
@@ -102,10 +219,8 @@ func (m *TaskListModel) MoveUp() {
 
 // JumpNextSection moves the cursor to the first task in the next section.
 func (m *TaskListModel) JumpNextSection() {
-	// Find next section header after cursor
 	for i := m.cursor + 1; i < len(m.items); i++ {
 		if m.items[i].kind == itemSection {
-			// Find first task after this section
 			m.moveToNextTask(i + 1)
 			return
 		}
@@ -114,7 +229,6 @@ func (m *TaskListModel) JumpNextSection() {
 
 // JumpPrevSection moves the cursor to the first task in the previous section.
 func (m *TaskListModel) JumpPrevSection() {
-	// Find the section header for the current cursor position
 	currentSection := -1
 	for i := m.cursor; i >= 0; i-- {
 		if m.items[i].kind == itemSection {
@@ -125,7 +239,6 @@ func (m *TaskListModel) JumpPrevSection() {
 	if currentSection <= 0 {
 		return
 	}
-	// Find the section before current section
 	for i := currentSection - 1; i >= 0; i-- {
 		if m.items[i].kind == itemSection {
 			m.moveToNextTask(i + 1)
@@ -140,6 +253,27 @@ func (m *TaskListModel) SetSize(w, h int) {
 	m.height = h
 }
 
+// FilterIndicator returns a string showing active filters, or empty if none.
+func (m TaskListModel) FilterIndicator() string {
+	var parts []string
+	switch m.statusFilter {
+	case filterActive:
+		parts = append(parts, "active")
+	case filterDone:
+		parts = append(parts, "done")
+	}
+	if m.searchQuery != "" {
+		parts = append(parts, fmt.Sprintf("search:%q", m.searchQuery))
+	}
+	if m.tagFilter != "" {
+		parts = append(parts, fmt.Sprintf("tag:+%s", m.tagFilter))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
 // View renders the task list.
 func (m TaskListModel) View() string {
 	if m.taskFile == nil || len(m.items) == 0 {
@@ -147,6 +281,12 @@ func (m TaskListModel) View() string {
 	}
 
 	var sb strings.Builder
+
+	// Filter indicator
+	if indicator := m.FilterIndicator(); indicator != "" {
+		sb.WriteString(ui.Tag.Render(indicator))
+		sb.WriteByte('\n')
+	}
 
 	for i, it := range m.items {
 		switch it.kind {

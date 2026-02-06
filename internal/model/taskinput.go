@@ -12,6 +12,8 @@ const (
 	inputNone inputMode = iota
 	inputAdd
 	inputEdit
+	inputSearch
+	inputTag
 )
 
 // TaskInputModel wraps a bubbles textinput for add/edit operations.
@@ -47,9 +49,28 @@ func (m *TaskInputModel) StartEdit(taskIndex int, currentTitle string) {
 	m.input.Focus()
 }
 
+// StartSearch begins the search flow.
+func (m *TaskInputModel) StartSearch() {
+	m.mode = inputSearch
+	m.editIndex = -1
+	m.input.SetValue("")
+	m.input.Placeholder = "Search..."
+	m.input.Focus()
+}
+
+// StartTag begins the tag-add flow.
+func (m *TaskInputModel) StartTag() {
+	m.mode = inputTag
+	m.editIndex = -1
+	m.input.SetValue("")
+	m.input.Placeholder = "Tag name..."
+	m.input.Focus()
+}
+
 // Cancel exits input mode without saving.
 func (m *TaskInputModel) Cancel() {
 	m.mode = inputNone
+	m.input.Placeholder = "Task title..."
 	m.input.Blur()
 }
 
