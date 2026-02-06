@@ -1,43 +1,121 @@
-// Package ui contains lipgloss styles and key bindings for the TUI.
 package ui
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Color palette — cohesive purple/blue theme with semantic colors.
 var (
-	// SectionHeader is bold cyan for section headers.
-	SectionHeader = lipgloss.NewStyle().Bold(true).
-			Foreground(lipgloss.AdaptiveColor{Light: "4", Dark: "6"})
-
-	// SelectedTask is reverse video for the cursor.
-	SelectedTask = lipgloss.NewStyle().Reverse(true)
-
-	// PriorityHigh is red for high priority.
-	PriorityHigh = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "1", Dark: "9"})
-
-	// PriorityMedium is yellow for medium priority.
-	PriorityMedium = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "3", Dark: "11"})
-
-	// PriorityLow is dim for low priority.
-	PriorityLow = lipgloss.NewStyle().Faint(true)
-
-	// Tag is magenta for tags.
-	Tag = lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "5", Dark: "13"})
-
-	// DoneTask is dim with strikethrough for completed tasks.
-	DoneTask = lipgloss.NewStyle().Faint(true).Strikethrough(true)
-
-	// HelpBar is subtle for the bottom help bar.
-	HelpBar = lipgloss.NewStyle().Faint(true)
-
-	// HelpOverlay is for the help screen.
-	HelpOverlay = lipgloss.NewStyle().Padding(1, 2)
-
-	// Progress is green-tinted for the done counter.
-	Progress = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "2", Dark: "10"})
+	ColorPurple    = lipgloss.AdaptiveColor{Light: "#5B21B6", Dark: "#A78BFA"}
+	ColorBlue      = lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#60A5FA"}
+	ColorCyan      = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#67E8F9"}
+	ColorGreen     = lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#86EFAC"}
+	ColorRed       = lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#FCA5A5"}
+	ColorYellow    = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FDE68A"}
+	ColorMauve     = lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#C4B5FD"}
+	ColorGray      = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
+	ColorDimGray   = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"}
+	ColorFaintGray = lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#4B5563"}
+	ColorBorder    = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#7C3AED"}
+	ColorWhite     = lipgloss.AdaptiveColor{Light: "#111827", Dark: "#F9FAFB"}
 )
+
+// UI element styles.
+var (
+	TitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(ColorPurple)
+	SectionHeader  = lipgloss.NewStyle().Bold(true).Foreground(ColorBlue)
+	SectionSep     = lipgloss.NewStyle().Foreground(ColorDimGray)
+	CursorStyle    = lipgloss.NewStyle().Foreground(ColorPurple).Bold(true)
+	SelectedTask   = lipgloss.NewStyle().Bold(true).Foreground(ColorWhite)
+	PriorityHigh   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
+	PriorityMedium = lipgloss.NewStyle().Foreground(ColorYellow)
+	PriorityLow    = lipgloss.NewStyle().Faint(true)
+	Tag            = lipgloss.NewStyle().Foreground(ColorMauve)
+	DueStyle       = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
+	DoneTask       = lipgloss.NewStyle().Foreground(ColorFaintGray).Strikethrough(true)
+	DoneMeta       = lipgloss.NewStyle().Foreground(ColorFaintGray)
+	StatusTodo     = lipgloss.NewStyle().Foreground(ColorGray)
+	StatusActive   = lipgloss.NewStyle().Foreground(ColorCyan)
+	StatusDone     = lipgloss.NewStyle().Foreground(ColorGreen)
+	HelpBar        = lipgloss.NewStyle().Foreground(ColorFaintGray)
+	HelpKey        = lipgloss.NewStyle().Foreground(ColorGray).Bold(true)
+	HelpOverlay    = lipgloss.NewStyle().Padding(1, 2)
+	Progress       = lipgloss.NewStyle().Foreground(ColorGreen)
+	ProgressFull   = lipgloss.NewStyle().Foreground(ColorGreen)
+	ProgressEmpty  = lipgloss.NewStyle().Foreground(ColorDimGray)
+	FlashStyle     = lipgloss.NewStyle().Foreground(ColorGreen).Bold(true)
+	InputLabel     = lipgloss.NewStyle().Foreground(ColorPurple).Bold(true)
+	EmptyState     = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
+	FilterBadge    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
+)
+
+// PadLine wraps content in border chars, padding to innerWidth:
+//
+//	│ content              │
+func PadLine(content string, innerWidth int, fg lipgloss.TerminalColor) string {
+	bc := lipgloss.NewStyle().Foreground(fg)
+	visWidth := lipgloss.Width(content)
+	pad := innerWidth - visWidth
+	if pad < 0 {
+		pad = 0
+	}
+	return bc.Render("│") + " " + content + strings.Repeat(" ", pad) + " " + bc.Render("│")
+}
+
+// HorizRule builds a horizontal border line: left────...────right
+func HorizRule(left, right string, width int, fg lipgloss.TerminalColor) string {
+	bc := lipgloss.NewStyle().Foreground(fg)
+	leftW := lipgloss.Width(left)
+	rightW := lipgloss.Width(right)
+	inner := width - leftW - rightW
+	if inner < 0 {
+		inner = 0
+	}
+	return bc.Render(left + strings.Repeat("─", inner) + right)
+}
+
+// AlignLR left-right aligns two strings within a given width.
+func AlignLR(left, right string, width int) string {
+	lw := lipgloss.Width(left)
+	rw := lipgloss.Width(right)
+	gap := width - lw - rw
+	if gap < 1 {
+		gap = 1
+	}
+	return left + strings.Repeat(" ", gap) + right
+}
+
+// HelpItem represents a key-action pair for the help bar.
+type HelpItem struct {
+	Key  string
+	Desc string
+}
+
+// RenderHelpBar formats help items: key desc · key desc · ...
+func RenderHelpBar(items []HelpItem) string {
+	var parts []string
+	for _, it := range items {
+		parts = append(parts, HelpKey.Render(it.Key)+" "+HelpBar.Render(it.Desc))
+	}
+	return strings.Join(parts, HelpBar.Render("  ·  "))
+}
+
+// RenderProgressBar renders: 3/8 ████░░░░
+func RenderProgressBar(done, total, barWidth int) string {
+	if total == 0 {
+		return ""
+	}
+	label := Progress.Render(fmt.Sprintf("%d/%d", done, total))
+	ratio := float64(done) / float64(total)
+	filled := int(ratio * float64(barWidth))
+	if filled > barWidth {
+		filled = barWidth
+	}
+	empty := barWidth - filled
+	bar := ProgressFull.Render(strings.Repeat("█", filled)) +
+		ProgressEmpty.Render(strings.Repeat("░", empty))
+	return label + " " + bar
+}

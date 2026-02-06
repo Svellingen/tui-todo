@@ -9,8 +9,6 @@ import (
 	"github.com/macone/todo-cli/internal/ui"
 )
 
-// item represents a renderable row in the task list -- either a section header,
-// a task, or a blank line.
 type itemType int
 
 const (
@@ -22,39 +20,36 @@ const (
 type item struct {
 	kind      itemType
 	section   string
-	taskIndex int // index into TaskFile.Tasks
+	taskIndex int
 }
 
-// statusFilter controls which tasks are shown.
 type statusFilter int
 
 const (
-	filterAll    statusFilter = iota // show everything
-	filterActive                     // Todo + InProgress
-	filterDone                       // Done only
+	filterAll    statusFilter = iota
+	filterActive
+	filterDone
 )
 
 // TaskListModel handles rendering and navigating the task list.
 type TaskListModel struct {
 	taskFile     *storage.TaskFile
-	items        []item       // flattened list of renderable rows
-	cursor       int          // index into items (only stops on task rows)
+	items        []item
+	cursor       int
 	width        int
 	height       int
+	scrollOffset int
 	statusFilter statusFilter
-	searchQuery  string // substring filter on title
-	tagFilter    string // filter by tag (empty = no filter)
+	searchQuery  string
+	tagFilter    string
 }
 
-// NewTaskListModel creates a TaskListModel from a TaskFile.
 func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
 	m := TaskListModel{taskFile: tf}
 	m.rebuildItems()
 	return m
 }
 
-// rebuildItems creates the flat item list from the TaskFile's lines,
-// applying any active filters.
 func (m *TaskListModel) rebuildItems() {
 	m.items = nil
 	for _, line := range m.taskFile.Lines {
@@ -69,19 +64,17 @@ func (m *TaskListModel) rebuildItems() {
 			m.items = append(m.items, item{kind: itemBlank})
 		}
 	}
-	// Reposition cursor on first visible task
 	m.cursor = 0
 	m.moveToNextTask(0)
+	m.scrollOffset = 0
 }
 
-// taskVisible returns whether a task passes all active filters.
 func (m *TaskListModel) taskVisible(idx int) bool {
 	if idx < 0 || idx >= len(m.taskFile.Tasks) {
 		return false
 	}
 	t := m.taskFile.Tasks[idx]
 
-	// Status filter
 	switch m.statusFilter {
 	case filterActive:
 		if t.Status == task.StatusDone {
@@ -93,14 +86,12 @@ func (m *TaskListModel) taskVisible(idx int) bool {
 		}
 	}
 
-	// Search query filter
 	if m.searchQuery != "" {
 		if !strings.Contains(strings.ToLower(t.Title), strings.ToLower(m.searchQuery)) {
 			return false
 		}
 	}
 
-	// Tag filter
 	if m.tagFilter != "" {
 		found := false
 		for _, tag := range t.Tags {
@@ -117,52 +108,37 @@ func (m *TaskListModel) taskVisible(idx int) bool {
 	return true
 }
 
-// SetStatusFilter sets the status filter and rebuilds the item list.
 func (m *TaskListModel) SetStatusFilter(f statusFilter) {
 	m.statusFilter = f
 	m.rebuildItems()
 }
 
-// StatusFilter returns the current status filter.
-func (m TaskListModel) StatusFilter() statusFilter {
-	return m.statusFilter
-}
+func (m TaskListModel) StatusFilter() statusFilter { return m.statusFilter }
 
-// SetSearchQuery sets the search query and rebuilds the item list.
 func (m *TaskListModel) SetSearchQuery(q string) {
 	m.searchQuery = q
 	m.rebuildItems()
 }
 
-// ClearSearch clears the search query and rebuilds.
 func (m *TaskListModel) ClearSearch() {
 	m.searchQuery = ""
 	m.rebuildItems()
 }
 
-// SearchQuery returns the current search query.
-func (m TaskListModel) SearchQuery() string {
-	return m.searchQuery
-}
+func (m TaskListModel) SearchQuery() string { return m.searchQuery }
 
-// SetTagFilter sets the tag filter and rebuilds the item list.
 func (m *TaskListModel) SetTagFilter(tag string) {
 	m.tagFilter = tag
 	m.rebuildItems()
 }
 
-// ClearTagFilter clears the tag filter and rebuilds.
 func (m *TaskListModel) ClearTagFilter() {
 	m.tagFilter = ""
 	m.rebuildItems()
 }
 
-// TagFilter returns the current tag filter.
-func (m TaskListModel) TagFilter() string {
-	return m.tagFilter
-}
+func (m TaskListModel) TagFilter() string { return m.tagFilter }
 
-// AllTags returns a deduplicated sorted list of all tags across all tasks.
 func (m TaskListModel) AllTags() []string {
 	seen := make(map[string]bool)
 	var tags []string
@@ -177,7 +153,6 @@ func (m TaskListModel) AllTags() []string {
 	return tags
 }
 
-// moveToNextTask moves the cursor to the next task item at or after pos.
 func (m *TaskListModel) moveToNextTask(pos int) {
 	for i := pos; i < len(m.items); i++ {
 		if m.items[i].kind == itemTask {
@@ -187,7 +162,6 @@ func (m *TaskListModel) moveToNextTask(pos int) {
 	}
 }
 
-// moveToPrevTask moves the cursor to the previous task item at or before pos.
 func (m *TaskListModel) moveToPrevTask(pos int) {
 	for i := pos; i >= 0; i-- {
 		if m.items[i].kind == itemTask {
@@ -197,37 +171,36 @@ func (m *TaskListModel) moveToPrevTask(pos int) {
 	}
 }
 
-// MoveDown moves the cursor to the next task.
 func (m *TaskListModel) MoveDown() {
 	for i := m.cursor + 1; i < len(m.items); i++ {
 		if m.items[i].kind == itemTask {
 			m.cursor = i
+			m.adjustScroll()
 			return
 		}
 	}
 }
 
-// MoveUp moves the cursor to the previous task.
 func (m *TaskListModel) MoveUp() {
 	for i := m.cursor - 1; i >= 0; i-- {
 		if m.items[i].kind == itemTask {
 			m.cursor = i
+			m.adjustScroll()
 			return
 		}
 	}
 }
 
-// JumpNextSection moves the cursor to the first task in the next section.
 func (m *TaskListModel) JumpNextSection() {
 	for i := m.cursor + 1; i < len(m.items); i++ {
 		if m.items[i].kind == itemSection {
 			m.moveToNextTask(i + 1)
+			m.adjustScroll()
 			return
 		}
 	}
 }
 
-// JumpPrevSection moves the cursor to the first task in the previous section.
 func (m *TaskListModel) JumpPrevSection() {
 	currentSection := -1
 	for i := m.cursor; i >= 0; i-- {
@@ -242,18 +215,54 @@ func (m *TaskListModel) JumpPrevSection() {
 	for i := currentSection - 1; i >= 0; i-- {
 		if m.items[i].kind == itemSection {
 			m.moveToNextTask(i + 1)
+			m.adjustScroll()
 			return
 		}
 	}
 }
 
-// SetSize updates the viewport dimensions.
 func (m *TaskListModel) SetSize(w, h int) {
 	m.width = w
 	m.height = h
 }
 
-// FilterIndicator returns a string showing active filters, or empty if none.
+// cursorLineIndex returns the line index of the cursor in the rendered output.
+func (m TaskListModel) cursorLineIndex() int {
+	idx := 0
+	isFirst := true
+	for i := 0; i < len(m.items); i++ {
+		if i == m.cursor {
+			return idx
+		}
+		switch m.items[i].kind {
+		case itemSection:
+			if !isFirst {
+				idx++ // blank line between sections
+			}
+			isFirst = false
+			idx += 2 // header + separator
+		case itemTask:
+			idx++
+		}
+	}
+	return idx
+}
+
+// adjustScroll keeps the cursor visible within the viewport.
+func (m *TaskListModel) adjustScroll() {
+	if m.height <= 0 {
+		return
+	}
+	curLine := m.cursorLineIndex()
+	if curLine < m.scrollOffset {
+		m.scrollOffset = curLine
+	}
+	if curLine >= m.scrollOffset+m.height {
+		m.scrollOffset = curLine - m.height + 1
+	}
+}
+
+// FilterIndicator returns a string showing active filters.
 func (m TaskListModel) FilterIndicator() string {
 	var parts []string
 	switch m.statusFilter {
@@ -263,10 +272,10 @@ func (m TaskListModel) FilterIndicator() string {
 		parts = append(parts, "done")
 	}
 	if m.searchQuery != "" {
-		parts = append(parts, fmt.Sprintf("search:%q", m.searchQuery))
+		parts = append(parts, fmt.Sprintf("/%s", m.searchQuery))
 	}
 	if m.tagFilter != "" {
-		parts = append(parts, fmt.Sprintf("tag:+%s", m.tagFilter))
+		parts = append(parts, fmt.Sprintf("+%s", m.tagFilter))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -274,7 +283,7 @@ func (m TaskListModel) FilterIndicator() string {
 	return "[" + strings.Join(parts, " ") + "]"
 }
 
-// ProgressString returns a "done/total done" progress string.
+// ProgressString returns "3/8 done".
 func (m TaskListModel) ProgressString() string {
 	if m.taskFile == nil {
 		return ""
@@ -292,114 +301,189 @@ func (m TaskListModel) ProgressString() string {
 	return fmt.Sprintf("%d/%d done", done, total)
 }
 
-// View renders the task list.
-func (m TaskListModel) View() string {
+// ProgressCounts returns the done and total task counts.
+func (m TaskListModel) ProgressCounts() (done, total int) {
+	if m.taskFile == nil {
+		return
+	}
+	total = len(m.taskFile.Tasks)
+	for _, t := range m.taskFile.Tasks {
+		if t.Status == task.StatusDone {
+			done++
+		}
+	}
+	return
+}
+
+// buildAllLines builds all rendered lines for the task list.
+func (m TaskListModel) buildAllLines(innerWidth int) []string {
 	if m.taskFile == nil || len(m.taskFile.Tasks) == 0 {
-		return "\n\n" + ui.HelpBar.Render("    No tasks yet. Press 'a' to add one.") + "\n\n"
+		return []string{
+			"",
+			"  " + ui.EmptyState.Render("No tasks yet. Press 'a' to add one."),
+			"",
+		}
 	}
 
-	// Check if all tasks are filtered out
-	hasVisibleTasks := false
+	hasVisible := false
 	for _, it := range m.items {
 		if it.kind == itemTask {
-			hasVisibleTasks = true
+			hasVisible = true
 			break
 		}
 	}
-	if !hasVisibleTasks {
-		return "\n" + ui.HelpBar.Render("    No matching tasks.") + "\n"
-	}
-
-	var sb strings.Builder
-
-	// Header line: filter indicator + progress
-	header := ""
-	if indicator := m.FilterIndicator(); indicator != "" {
-		header = ui.Tag.Render(indicator)
-	}
-	if progress := m.ProgressString(); progress != "" {
-		if header != "" {
-			header += "  "
+	if !hasVisible {
+		return []string{
+			"",
+			"  " + ui.EmptyState.Render("No matching tasks."),
+			"",
 		}
-		header += ui.Progress.Render(progress)
 	}
-	if header != "" {
-		sb.WriteString(header + "\n")
-	}
+
+	var lines []string
+	isFirstSection := true
 
 	for i, it := range m.items {
 		switch it.kind {
 		case itemSection:
-			sb.WriteString(ui.SectionHeader.Render(it.section))
+			if !isFirstSection {
+				lines = append(lines, "")
+			}
+			isFirstSection = false
+
+			name := extractSectionName(it.section)
+			lines = append(lines, "  "+ui.SectionHeader.Render(strings.ToUpper(name)))
+
+			sepWidth := innerWidth - 4
+			if sepWidth < 10 {
+				sepWidth = 10
+			}
+			lines = append(lines, "  "+ui.SectionSep.Render(strings.Repeat("─", sepWidth)))
+
 		case itemTask:
-			line := m.renderTask(it.taskIndex, i == m.cursor)
-			sb.WriteString(line)
+			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor))
+
 		case itemBlank:
-			// empty line
+			// skip — we manage spacing ourselves
 		}
-		sb.WriteByte('\n')
 	}
 
-	return sb.String()
+	return lines
 }
 
-// renderTask renders a single task line with styling.
+// ViewLines returns rendered lines, clipped to maxLines with scrolling.
+func (m TaskListModel) ViewLines(innerWidth, maxLines int) []string {
+	allLines := m.buildAllLines(innerWidth)
+
+	if maxLines <= 0 || len(allLines) <= maxLines {
+		return allLines
+	}
+
+	start := m.scrollOffset
+	end := start + maxLines
+	if start < 0 {
+		start = 0
+	}
+	if end > len(allLines) {
+		end = len(allLines)
+	}
+	if start >= len(allLines) {
+		start = 0
+		end = maxLines
+		if end > len(allLines) {
+			end = len(allLines)
+		}
+	}
+
+	return allLines[start:end]
+}
+
+// View renders the task list as a single string.
+func (m TaskListModel) View() string {
+	lines := m.ViewLines(m.width, m.height)
+	return strings.Join(lines, "\n")
+}
+
 func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	if taskIdx < 0 || taskIdx >= len(m.taskFile.Tasks) {
 		return ""
 	}
 	t := m.taskFile.Tasks[taskIdx]
 
-	var parts []string
+	// Cursor arrow
+	cursor := "   "
+	if selected {
+		cursor = ui.CursorStyle.Render(" ▸ ")
+	}
 
 	// Status icon
+	var icon string
 	switch t.Status {
 	case task.StatusTodo:
-		parts = append(parts, "\u25cb") // open circle
+		icon = ui.StatusTodo.Render("○")
 	case task.StatusInProgress:
-		parts = append(parts, "\u25d0") // half circle
+		icon = ui.StatusActive.Render("◐")
 	case task.StatusDone:
-		parts = append(parts, "\u25cf") // filled circle
+		icon = ui.StatusDone.Render("●")
 	}
 
-	// Title (with priority coloring)
+	// Title
 	title := t.Title
+
+	// Priority indicator
+	var prio string
 	switch t.Priority {
 	case task.PriorityHigh:
-		title = ui.PriorityHigh.Render(title)
+		prio = ui.PriorityHigh.Render("!!")
 	case task.PriorityMedium:
-		title = ui.PriorityMedium.Render(title)
-	case task.PriorityLow:
-		title = ui.PriorityLow.Render(title)
+		prio = ui.PriorityMedium.Render("!")
 	}
-	parts = append(parts, title)
 
 	// Tags
+	var tagParts []string
 	for _, tag := range t.Tags {
-		parts = append(parts, ui.Tag.Render(fmt.Sprintf("+%s", tag)))
+		tagParts = append(tagParts, ui.Tag.Render("+"+tag))
 	}
+	tagStr := strings.Join(tagParts, " ")
 
 	// Due date
+	var due string
 	if t.DueDate != nil {
-		parts = append(parts, ui.HelpBar.Render(fmt.Sprintf("due:%s", t.DueDate.Format("2006-01-02"))))
+		due = ui.DueStyle.Render("due:" + t.DueDate.Format("2006-01-02"))
 	}
 
-	line := strings.Join(parts, " ")
+	// Build metadata
+	var meta []string
+	if prio != "" {
+		meta = append(meta, prio)
+	}
+	if tagStr != "" {
+		meta = append(meta, tagStr)
+	}
+	if due != "" {
+		meta = append(meta, due)
+	}
+	metaStr := strings.Join(meta, " ")
 
-	// Apply done styling
+	// Apply styling based on state
 	if t.Status == task.StatusDone {
-		line = ui.DoneTask.Render(line)
+		title = ui.DoneTask.Render(title)
+		if metaStr != "" {
+			metaStr = ui.DoneMeta.Render(strings.Join(meta, " "))
+		}
+	} else if selected {
+		title = ui.SelectedTask.Render(title)
 	}
 
-	// Apply selection
-	if selected {
-		line = ui.SelectedTask.Render(line)
+	// Assemble
+	line := cursor + icon + "  " + title
+	if metaStr != "" {
+		line += "  " + metaStr
 	}
 
-	return "  " + line
+	return line
 }
 
-// SelectedTaskItem returns the currently selected task, or nil if none.
 func (m TaskListModel) SelectedTaskItem() *task.Task {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
 		return nil
@@ -411,8 +495,6 @@ func (m TaskListModel) SelectedTaskItem() *task.Task {
 	return &m.taskFile.Tasks[it.taskIndex]
 }
 
-// SelectedTaskIndex returns the index into TaskFile.Tasks for the selected item,
-// or -1 if no task is selected.
 func (m TaskListModel) SelectedTaskIndex() int {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
 		return -1
@@ -422,4 +504,11 @@ func (m TaskListModel) SelectedTaskIndex() int {
 		return -1
 	}
 	return it.taskIndex
+}
+
+func extractSectionName(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimPrefix(s, "## ")
+	s = strings.TrimPrefix(s, "# ")
+	return strings.TrimSpace(s)
 }

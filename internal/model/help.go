@@ -1,41 +1,70 @@
 package model
 
-import "strings"
+import (
+	"strings"
 
-// helpText returns the full help overlay content.
-func helpText() string {
+	"github.com/macone/todo-cli/internal/ui"
+)
+
+// helpContent returns styled help text for the overlay.
+func helpContent() string {
 	var sb strings.Builder
 
-	sb.WriteString("Keybinding Reference\n")
-	sb.WriteString("====================\n\n")
+	title := ui.TitleStyle.Render("Keybinding Reference")
+	sb.WriteString(title + "\n\n")
 
-	sb.WriteString("Navigation\n")
-	sb.WriteString("  j/k        Move down/up\n")
-	sb.WriteString("  J/K        Jump to next/previous section\n\n")
+	groups := []struct {
+		name  string
+		items []ui.HelpItem
+	}{
+		{"Navigation", []ui.HelpItem{
+			{"j / k", "Move down / up"},
+			{"J / K", "Jump next / prev section"},
+		}},
+		{"Actions", []ui.HelpItem{
+			{"a", "Add new task"},
+			{"e", "Edit task title"},
+			{"d", "Toggle done"},
+			{"x", "Delete task"},
+			{"s", "Cycle status"},
+			{"p", "Cycle priority"},
+			{"t", "Add tag"},
+			{"u", "Undo"},
+		}},
+		{"Filtering", []ui.HelpItem{
+			{"/", "Search by title"},
+			{"f", "Filter by tag"},
+			{"1", "Show all"},
+			{"2", "Active only"},
+			{"3", "Done only"},
+		}},
+		{"General", []ui.HelpItem{
+			{"?", "Toggle this help"},
+			{"q", "Quit"},
+			{"Ctrl+C", "Quit"},
+		}},
+	}
 
-	sb.WriteString("Actions\n")
-	sb.WriteString("  a          Add new task\n")
-	sb.WriteString("  e          Edit task title\n")
-	sb.WriteString("  d          Toggle done\n")
-	sb.WriteString("  x          Delete task (with confirmation)\n")
-	sb.WriteString("  s          Cycle status (todo/in-progress/done)\n")
-	sb.WriteString("  p          Cycle priority (none/low/medium/high)\n")
-	sb.WriteString("  t          Add tag to task\n")
-	sb.WriteString("  u          Undo last action\n\n")
+	for i, g := range groups {
+		sb.WriteString(ui.SectionHeader.Render(g.name) + "\n")
+		for _, item := range g.items {
+			key := ui.HelpKey.Render(padRight(item.Key, 10))
+			desc := ui.HelpBar.Render(item.Desc)
+			sb.WriteString("  " + key + " " + desc + "\n")
+		}
+		if i < len(groups)-1 {
+			sb.WriteString("\n")
+		}
+	}
 
-	sb.WriteString("Filtering\n")
-	sb.WriteString("  /          Search by title\n")
-	sb.WriteString("  f          Filter by tag\n")
-	sb.WriteString("  1          Show all tasks\n")
-	sb.WriteString("  2          Show active only (todo + in-progress)\n")
-	sb.WriteString("  3          Show done only\n\n")
-
-	sb.WriteString("General\n")
-	sb.WriteString("  ?          Toggle this help\n")
-	sb.WriteString("  q          Quit\n")
-	sb.WriteString("  Ctrl+C     Quit\n\n")
-
-	sb.WriteString("Press ? or Esc to close")
+	sb.WriteString("\n" + ui.HelpBar.Render("Press ? or Esc to close"))
 
 	return sb.String()
+}
+
+func padRight(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-len(s))
 }

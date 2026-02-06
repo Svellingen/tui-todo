@@ -1,4 +1,3 @@
-// Package model contains the bubbletea models for the TUI.
 package model
 
 import (
@@ -6,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/macone/todo-cli/internal/storage"
 	"github.com/macone/todo-cli/internal/task"
@@ -14,27 +14,23 @@ import (
 
 const maxUndoStack = 20
 
-// appMode tracks the current interaction mode.
 type appMode int
 
 const (
 	modeNormal appMode = iota
-	modeInput          // text input active (add/edit/search/tag)
-	modeConfirmDelete  // waiting for y/n on delete
-	modeTagSelect      // picking a tag to filter by
-	modeHelp           // help overlay visible
+	modeInput
+	modeConfirmDelete
+	modeTagSelect
+	modeHelp
 )
 
-// undoEntry stores a snapshot of the task file for undo.
 type undoEntry struct {
-	content string // raw markdown content for restoring
-	desc    string // human-readable description
+	content string
+	desc    string
 }
 
-// flashMsg clears the status message after a delay.
 type flashMsg struct{}
 
-// App is the top-level bubbletea model.
 type App struct {
 	store    *storage.Store
 	taskFile *storage.TaskFile
@@ -46,12 +42,11 @@ type App struct {
 	err      error
 
 	undoStack  []undoEntry
-	statusMsg  string // temporary message shown in help bar
-	tagOptions []string // tag list for tag-filter selection
-	tagCursor  int      // cursor in tag selection
+	statusMsg  string
+	tagOptions []string
+	tagCursor  int
 }
 
-// NewApp creates a new App model with the given store.
 func NewApp(store *storage.Store) App {
 	return App{
 		store: store,
@@ -59,7 +54,6 @@ func NewApp(store *storage.Store) App {
 	}
 }
 
-// Init loads tasks from the store.
 func (a App) Init() tea.Cmd {
 	return func() tea.Msg {
 		tf, err := a.store.Load()
@@ -73,7 +67,6 @@ func (a App) Init() tea.Cmd {
 type loadedMsg struct{ tf *storage.TaskFile }
 type errMsg struct{ err error }
 
-// pushUndo saves the current state for undo.
 func (a *App) pushUndo(desc string) {
 	w := storage.NewWriter()
 	content := w.Write(a.taskFile)
@@ -83,7 +76,6 @@ func (a *App) pushUndo(desc string) {
 	}
 }
 
-// save writes the task file to disk.
 func (a *App) save() tea.Cmd {
 	tf := a.taskFile
 	s := a.store
@@ -95,20 +87,37 @@ func (a *App) save() tea.Cmd {
 	}
 }
 
-// flash sets a temporary status message that clears after 2 seconds.
 func flash(msg string) (string, tea.Cmd) {
 	return msg, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 		return flashMsg{}
 	})
 }
 
-// Update handles messages.
+func (a *App) updateListSize() {
+	overhead := 8
+	if a.mode == modeInput {
+		overhead++
+	}
+	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
+		overhead += len(a.tagOptions) + 1
+	}
+	h := a.height - overhead
+	if h < 3 {
+		h = 3
+	}
+	w := a.width - 4
+	if w < 20 {
+		w = 20
+	}
+	a.list.SetSize(w, h)
+}
+
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case loadedMsg:
 		a.taskFile = msg.tf
 		a.list = NewTaskListModel(a.taskFile)
-		a.list.SetSize(a.width, a.height-1)
+		a.updateListSize()
 		return a, nil
 
 	case errMsg:
@@ -122,7 +131,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.list.SetSize(a.width, a.height-1)
+		a.updateListSize()
 		return a, nil
 
 	case tea.KeyMsg:
@@ -135,7 +144,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	// Handle confirm-delete mode
 	if a.mode == modeConfirmDelete {
 		switch key {
 		case "y":
@@ -143,11 +151,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			a.mode = modeNormal
 			a.statusMsg = ""
+			a.updateListSize()
 			return a, nil
 		}
 	}
 
-	// Handle help mode
 	if a.mode == modeHelp {
 		switch key {
 		case ui.KeyHelp, "esc":
@@ -156,7 +164,6 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Handle tag selection mode
 	if a.mode == modeTagSelect {
 		switch key {
 		case ui.KeyDown:
@@ -173,14 +180,15 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			a.mode = modeNormal
 			a.tagOptions = nil
+			a.updateListSize()
 		case "esc":
 			a.mode = modeNormal
 			a.tagOptions = nil
+			a.updateListSize()
 		}
 		return a, nil
 	}
 
-	// Handle text input mode
 	if a.mode == modeInput {
 		switch key {
 		case "enter":
@@ -191,10 +199,10 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			a.input.Cancel()
 			a.mode = modeNormal
+			a.updateListSize()
 			return a, nil
 		default:
 			cmd := a.input.Update(msg)
-			// Live search filtering
 			if a.input.Mode() == inputSearch {
 				a.list.SetSearchQuery(a.input.Value())
 			}
@@ -202,7 +210,6 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Normal mode
 	switch key {
 	case "ctrl+c":
 		return a, tea.Quit
@@ -221,6 +228,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyAdd:
 		a.mode = modeInput
 		a.input.StartAdd()
+		a.updateListSize()
 		return a, nil
 	case ui.KeyEdit:
 		return a.startEdit()
@@ -241,6 +249,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeySearch:
 		a.mode = modeInput
 		a.input.StartSearch()
+		a.updateListSize()
 		return a, nil
 	case ui.KeyTag:
 		return a.addTag()
@@ -277,6 +286,7 @@ func (a App) startEdit() (tea.Model, tea.Cmd) {
 	}
 	a.mode = modeInput
 	a.input.StartEdit(idx, a.taskFile.Tasks[idx].Title)
+	a.updateListSize()
 	return a, nil
 }
 
@@ -285,6 +295,7 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 	if value == "" {
 		a.input.Cancel()
 		a.mode = modeNormal
+		a.updateListSize()
 		return a, nil
 	}
 
@@ -299,6 +310,7 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		a.statusMsg = msg
 		a.input.Cancel()
 		a.mode = modeNormal
+		a.updateListSize()
 		return a, tea.Batch(a.save(), cmd)
 
 	case inputEdit:
@@ -318,16 +330,16 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		}
 		a.input.Cancel()
 		a.mode = modeNormal
+		a.updateListSize()
 		return a, a.save()
 
 	case inputSearch:
-		// Lock the current search filter
 		a.input.Cancel()
 		a.mode = modeNormal
+		a.updateListSize()
 		return a, nil
 
 	case inputTag:
-		// Add tag to selected task
 		idx := a.list.SelectedTaskIndex()
 		if idx >= 0 && idx < len(a.taskFile.Tasks) {
 			a.pushUndo("add tag")
@@ -335,11 +347,13 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		}
 		a.input.Cancel()
 		a.mode = modeNormal
+		a.updateListSize()
 		return a, a.save()
 	}
 
 	a.input.Cancel()
 	a.mode = modeNormal
+	a.updateListSize()
 	return a, nil
 }
 
@@ -354,7 +368,6 @@ func (a *App) addTask(value string) {
 	}
 	a.taskFile.Tasks = append(a.taskFile.Tasks, newTask)
 
-	// Add task line to the Backlog section
 	newLine := storage.Line{
 		Type:      storage.LineTask,
 		TaskIndex: len(a.taskFile.Tasks) - 1,
@@ -409,17 +422,15 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	a.pushUndo("delete")
 	title := a.taskFile.Tasks[idx].Title
 
-	// Remove task from Tasks slice
 	a.taskFile.Tasks = append(a.taskFile.Tasks[:idx], a.taskFile.Tasks[idx+1:]...)
 
-	// Remove the corresponding line and fix task indices
 	newLines := make([]storage.Line, 0, len(a.taskFile.Lines))
 	for _, line := range a.taskFile.Lines {
 		if line.Type == storage.LineTask && line.TaskIndex == idx {
-			continue // skip the deleted task's line
+			continue
 		}
 		if line.Type == storage.LineTask && line.TaskIndex > idx {
-			line.TaskIndex-- // adjust indices
+			line.TaskIndex--
 		}
 		newLines = append(newLines, line)
 	}
@@ -441,11 +452,11 @@ func (a App) addTag() (tea.Model, tea.Cmd) {
 	}
 	a.mode = modeInput
 	a.input.StartTag()
+	a.updateListSize()
 	return a, nil
 }
 
 func (a App) openTagFilter() (tea.Model, tea.Cmd) {
-	// If already filtering by tag, clear it
 	if a.list.TagFilter() != "" {
 		a.list.ClearTagFilter()
 		return a, nil
@@ -460,6 +471,7 @@ func (a App) openTagFilter() (tea.Model, tea.Cmd) {
 	a.mode = modeTagSelect
 	a.tagOptions = tags
 	a.tagCursor = 0
+	a.updateListSize()
 	return a, nil
 }
 
@@ -516,7 +528,7 @@ func (a App) undo() (tea.Model, tea.Cmd) {
 	}
 	a.taskFile = tf
 	a.list = NewTaskListModel(a.taskFile)
-	a.list.SetSize(a.width, a.height-1)
+	a.updateListSize()
 
 	var msg string
 	var cmd tea.Cmd
@@ -525,7 +537,8 @@ func (a App) undo() (tea.Model, tea.Cmd) {
 	return a, tea.Batch(a.save(), cmd)
 }
 
-// View renders the TUI.
+// ─── View ──────────────────────────────────────────────────────────────────
+
 func (a App) View() string {
 	if a.err != nil {
 		return "Error: " + a.err.Error()
@@ -534,52 +547,149 @@ func (a App) View() string {
 		return "Loading..."
 	}
 
-	// Help overlay
+	// Help overlay takes over the full screen
 	if a.mode == modeHelp {
-		return ui.HelpOverlay.Render(helpText())
+		return a.renderHelpOverlay()
 	}
 
-	var sb strings.Builder
-	sb.WriteString(a.list.View())
+	w := a.width
+	if w < 40 {
+		w = 80
+	}
+	h := a.height
+	if h < 10 {
+		h = 24
+	}
 
-	// Show input if active
+	bc := ui.ColorBorder
+	innerWidth := w - 4 // border + padding
+
+	var lines []string
+
+	// Top border: ╭──────────────╮
+	lines = append(lines, ui.HorizRule("╭", "╮", w, bc))
+
+	// Blank line
+	lines = append(lines, ui.PadLine("", innerWidth, bc))
+
+	// Title bar: ✦ todo              [filter] 3/8 ████░░░░
+	titleLeft := ui.TitleStyle.Render("✦ todo")
+	if fi := a.list.FilterIndicator(); fi != "" {
+		titleLeft += "  " + ui.FilterBadge.Render(fi)
+	}
+
+	var titleRight string
+	done, total := a.list.ProgressCounts()
+	if total > 0 {
+		titleRight = ui.RenderProgressBar(done, total, 8)
+	}
+
+	titleLine := ui.AlignLR(titleLeft, titleRight, innerWidth)
+	lines = append(lines, ui.PadLine(titleLine, innerWidth, bc))
+
+	// Blank line
+	lines = append(lines, ui.PadLine("", innerWidth, bc))
+
+	// Content area
+	overhead := 8
+	if a.mode == modeInput {
+		overhead++
+	}
+	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
+		overhead += len(a.tagOptions) + 1
+	}
+	contentHeight := h - overhead
+	if contentHeight < 3 {
+		contentHeight = 3
+	}
+
+	contentLines := a.list.ViewLines(innerWidth, contentHeight)
+	for _, cl := range contentLines {
+		lines = append(lines, ui.PadLine(cl, innerWidth, bc))
+	}
+
+	// Trailing blank
+	lines = append(lines, ui.PadLine("", innerWidth, bc))
+
+	// Input area (if active)
 	if a.mode == modeInput {
 		var prefix string
 		switch a.input.Mode() {
 		case inputAdd:
-			prefix = "Add: "
+			prefix = ui.InputLabel.Render("  Add: ")
 		case inputEdit:
-			prefix = "Edit: "
+			prefix = ui.InputLabel.Render("  Edit: ")
 		case inputSearch:
-			prefix = "/: "
+			prefix = ui.InputLabel.Render("  / ")
 		case inputTag:
-			prefix = "Tag: "
+			prefix = ui.InputLabel.Render("  Tag: ")
 		}
-		sb.WriteString(prefix + a.input.View() + "\n")
+		lines = append(lines, ui.PadLine(prefix+a.input.View(), innerWidth, bc))
 	}
 
-	// Show tag selector if active
+	// Tag selector (if active)
 	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
-		sb.WriteString("Filter by tag:\n")
+		lines = append(lines, ui.PadLine("  "+ui.InputLabel.Render("Filter by tag:"), innerWidth, bc))
 		for i, tag := range a.tagOptions {
-			cursor := "  "
+			cursor := "    "
 			if i == a.tagCursor {
-				cursor = "> "
+				cursor = ui.CursorStyle.Render("  ▸ ")
 			}
-			sb.WriteString(cursor + "+" + tag + "\n")
+			lines = append(lines, ui.PadLine(cursor+ui.Tag.Render("+"+tag), innerWidth, bc))
 		}
 	}
+
+	// Separator: ├──────────────┤
+	lines = append(lines, ui.HorizRule("├", "┤", w, bc))
 
 	// Help/status bar
-	var helpText string
+	var footer string
 	if a.statusMsg != "" {
-		helpText = a.statusMsg
+		footer = "  " + ui.FlashStyle.Render(a.statusMsg)
 	} else if a.mode == modeConfirmDelete {
-		helpText = "Delete? y/n"
+		footer = "  " + ui.PriorityHigh.Render("Delete?") + " " + ui.HelpBar.Render("y/n")
 	} else {
-		helpText = "j/k: move  d: done  a: add  e: edit  x: del  s: status  p: prio  /: search  f: tag filter  1/2/3: filter  q: quit"
+		footer = "  " + ui.RenderHelpBar(normalHelpItems())
 	}
-	sb.WriteString(ui.HelpBar.Render(helpText))
+	lines = append(lines, ui.PadLine(footer, innerWidth, bc))
 
-	return sb.String()
+	// Bottom border: ╰──────────────╯
+	lines = append(lines, ui.HorizRule("╰", "╯", w, bc))
+
+	return strings.Join(lines, "\n")
+}
+
+func normalHelpItems() []ui.HelpItem {
+	return []ui.HelpItem{
+		{"j/k", "move"},
+		{"d", "done"},
+		{"a", "add"},
+		{"e", "edit"},
+		{"p", "prio"},
+		{"/", "search"},
+		{"?", "help"},
+		{"q", "quit"},
+	}
+}
+
+func (a App) renderHelpOverlay() string {
+	w := a.width
+	h := a.height
+	if w < 40 {
+		w = 80
+	}
+	if h < 10 {
+		h = 24
+	}
+
+	content := helpContent()
+
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorBorder).
+		Padding(1, 3)
+
+	box := style.Render(content)
+
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
 }
