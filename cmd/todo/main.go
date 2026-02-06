@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "charm.land/bubbletea/v2"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/macone/todo-cli/internal/model"
 	"github.com/macone/todo-cli/internal/storage"
@@ -14,7 +14,7 @@ func main() {
 	launchTUI := func() error {
 		store := storage.NewStore(defaultFile)
 		m := model.NewApp(store)
-		p := tea.NewProgram(m)
+		p := tea.NewProgram(m, tea.WithAltScreen())
 		_, err := p.Run()
 		return err
 	}
