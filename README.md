@@ -50,6 +50,7 @@ todo
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move down / up |
+| `↓` / `↑` | Move down / up |
 | `J` / `K` | Jump to next / previous section |
 
 ### Actions

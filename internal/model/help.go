@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/macone/todo-cli/internal/ui"
 )
 
@@ -19,6 +21,7 @@ func helpContent() string {
 	}{
 		{"Navigation", []ui.HelpItem{
 			{"j / k", "Move down / up"},
+			{"↓ / ↑", "Move down / up"},
 			{"J / K", "Jump next / prev section"},
 		}},
 		{"Actions", []ui.HelpItem{
@@ -62,9 +65,12 @@ func helpContent() string {
 	return sb.String()
 }
 
+// padRight pads s to width using its rendered width, so multi-byte glyphs like
+// the arrow keys stay aligned with the ASCII rows.
 func padRight(s string, width int) string {
-	if len(s) >= width {
+	w := lipgloss.Width(s)
+	if w >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + strings.Repeat(" ", width-w)
 }

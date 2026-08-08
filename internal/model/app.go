@@ -166,11 +166,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if a.mode == modeTagSelect {
 		switch key {
-		case ui.KeyDown:
+		case ui.KeyDown, ui.KeyArrowDown:
 			if a.tagCursor < len(a.tagOptions)-1 {
 				a.tagCursor++
 			}
-		case ui.KeyUp:
+		case ui.KeyUp, ui.KeyArrowUp:
 			if a.tagCursor > 0 {
 				a.tagCursor--
 			}
@@ -215,9 +215,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	case ui.KeyQuit:
 		return a, tea.Quit
-	case ui.KeyDown:
+	case ui.KeyDown, ui.KeyArrowDown:
 		a.list.MoveDown()
-	case ui.KeyUp:
+	case ui.KeyUp, ui.KeyArrowUp:
 		a.list.MoveUp()
 	case ui.KeySectionDown:
 		a.list.JumpNextSection()

@@ -5,6 +5,10 @@ const (
 	KeyUp   = "k"
 	KeyDown = "j"
 
+	// Arrow keys are accepted everywhere the vim-style keys move the cursor.
+	KeyArrowUp   = "up"
+	KeyArrowDown = "down"
+
 	KeySectionUp   = "K"
 	KeySectionDown = "J"
 
