@@ -347,6 +347,98 @@ func (m *TaskListModel) JumpPrevSection() {
 	}
 }
 
+// sectionLevel returns the heading level of an item, or 0 when it is not a
+// heading.
+func (m TaskListModel) sectionLevel(i int) int {
+	if i < 0 || i >= len(m.items) || m.items[i].kind != itemSection {
+		return 0
+	}
+	level, _ := storage.ParseHeading(strings.TrimSpace(m.items[i].section))
+	return level
+}
+
+// JumpNextSectionOfLevel selects the next heading at exactly the given level,
+// stepping over deeper sub-headings.
+func (m *TaskListModel) JumpNextSectionOfLevel(level int) {
+	for i := m.cursor + 1; i < len(m.items); i++ {
+		if m.sectionLevel(i) == level {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// JumpPrevSectionOfLevel selects the nearest heading above the cursor at
+// exactly the given level.
+func (m *TaskListModel) JumpPrevSectionOfLevel(level int) {
+	for i := m.cursor - 1; i >= 0; i-- {
+		if m.sectionLevel(i) == level {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// JumpParentSection moves one step up the heading hierarchy.
+//
+// From a task that is the heading enclosing it; from a heading it is that
+// heading's parent -- the nearest shallower one above it. floor is the level
+// the walk stops at, so on a heading at that level nothing happens.
+func (m *TaskListModel) JumpParentSection(floor int) {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return
+	}
+
+	level := m.sectionLevel(m.cursor)
+	if level == 0 {
+		// On a task: step out to whatever heading it lives under.
+		for i := m.cursor - 1; i >= 0; i-- {
+			if m.sectionLevel(i) > 0 {
+				m.cursor = i
+				m.adjustScroll()
+				return
+			}
+		}
+		return
+	}
+
+	if level <= floor {
+		return
+	}
+	for i := m.cursor - 1; i >= 0; i-- {
+		if l := m.sectionLevel(i); l >= floor && l < level {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// JumpChildSection selects the first sub-heading nested under the heading the
+// cursor is on. It does nothing on a task, or on a heading that has no
+// sub-headings of its own.
+func (m *TaskListModel) JumpChildSection() {
+	level := m.sectionLevel(m.cursor)
+	if level == 0 {
+		return
+	}
+
+	for i := m.cursor + 1; i < len(m.items); i++ {
+		l := m.sectionLevel(i)
+		if l == 0 {
+			continue
+		}
+		if l <= level {
+			return // left this heading's subtree without finding a child
+		}
+		m.cursor = i
+		m.adjustScroll()
+		return
+	}
+}
+
 // SelectedLineIndex returns the Lines index of whatever the cursor is on,
 // heading or task, or -1 when nothing is selected.
 func (m TaskListModel) SelectedLineIndex() int {

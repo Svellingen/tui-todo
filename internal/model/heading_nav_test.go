@@ -102,6 +102,184 @@ func TestMoveDownFromHeading(t *testing.T) {
 	}
 }
 
+const levelFixture = "# Title\n" +
+	"- [ ] title task\n" +
+	"## Alpha\n" +
+	"- [ ] alpha task\n" +
+	"### Alpha sub\n" +
+	"- [ ] sub task\n" +
+	"#### Alpha deep\n" +
+	"- [ ] deep task\n" +
+	"## Beta\n" +
+	"- [ ] beta task\n" +
+	"### Beta sub\n" +
+	"- [ ] beta sub task\n" +
+	"## Gamma\n" +
+	"- [ ] gamma task\n"
+
+// ctrl+j / ctrl+k visit "##" headings and step over everything deeper.
+func TestJumpSectionOfLevelSkipsOtherLevels(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+
+	for _, w := range []string{"heading:Alpha", "heading:Beta", "heading:Gamma"} {
+		m.JumpNextSectionOfLevel(2)
+		if got := m.cursorKind(); got != w {
+			t.Fatalf("expected %s, got %s", w, got)
+		}
+	}
+	m.JumpNextSectionOfLevel(2)
+	if got := m.cursorKind(); got != "heading:Gamma" {
+		t.Errorf("expected to stay on Gamma, got %s", got)
+	}
+
+	for _, w := range []string{"heading:Beta", "heading:Alpha"} {
+		m.JumpPrevSectionOfLevel(2)
+		if got := m.cursorKind(); got != w {
+			t.Fatalf("expected %s, got %s", w, got)
+		}
+	}
+}
+
+// The "#" title is a different level, so it is not a stop.
+func TestJumpSectionOfLevelIgnoresTheTitle(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	m.JumpNextSectionOfLevel(2) // Alpha
+
+	m.JumpPrevSectionOfLevel(2)
+	if got := m.cursorKind(); got != "heading:Alpha" {
+		t.Errorf("expected to stay on Alpha rather than reach the title, got %s", got)
+	}
+}
+
+// From a task nested under sub-headings, the jump still resolves to the
+// enclosing "##" heading.
+func TestJumpSectionOfLevelFromNestedTask(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	for m.cursorKind() != "task:deep task" {
+		before := m.cursor
+		m.MoveDown()
+		if m.cursor == before {
+			t.Fatal("never reached the deep task")
+		}
+	}
+
+	m.JumpPrevSectionOfLevel(2)
+	if got := m.cursorKind(); got != "heading:Alpha" {
+		t.Errorf("expected heading:Alpha, got %s", got)
+	}
+
+	m.JumpNextSectionOfLevel(2)
+	if got := m.cursorKind(); got != "heading:Beta" {
+		t.Errorf("expected heading:Beta, got %s", got)
+	}
+}
+
+// ctrl+l descends one heading level at a time and stops at the deepest.
+func TestJumpChildSectionDescends(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	m.JumpNextSectionOfLevel(2) // Alpha
+
+	for _, w := range []string{"heading:Alpha sub", "heading:Alpha deep"} {
+		m.JumpChildSection()
+		if got := m.cursorKind(); got != w {
+			t.Fatalf("expected %s, got %s", w, got)
+		}
+	}
+
+	m.JumpChildSection()
+	if got := m.cursorKind(); got != "heading:Alpha deep" {
+		t.Errorf("expected to stay on the deepest heading, got %s", got)
+	}
+}
+
+// A heading whose subtree holds no sub-headings has nowhere to descend to.
+func TestJumpChildSectionWithoutChildren(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	for m.cursorKind() != "heading:Gamma" {
+		m.JumpNextSectionOfLevel(2)
+	}
+
+	m.JumpChildSection()
+	if got := m.cursorKind(); got != "heading:Gamma" {
+		t.Errorf("expected Gamma to have no child, got %s", got)
+	}
+}
+
+// Descending must not escape into the next section's sub-headings.
+func TestJumpChildSectionStaysInSubtree(t *testing.T) {
+	// Alpha has no sub-heading of its own here, but Beta does.
+	content := "## Alpha\n- [ ] alpha task\n## Beta\n### Beta sub\n- [ ] beta sub task\n"
+	m := newScrollList(t, content, 40)
+	for m.cursorKind() != "heading:Alpha" {
+		m.JumpPrevSection()
+	}
+
+	m.JumpChildSection()
+	if got := m.cursorKind(); got != "heading:Alpha" {
+		t.Errorf("expected to stay on Alpha, got %s", got)
+	}
+}
+
+func TestJumpChildSectionDoesNothingOnATask(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	before := m.cursorKind()
+	m.JumpChildSection()
+	if got := m.cursorKind(); got != before {
+		t.Errorf("expected no move from a task, went to %s", got)
+	}
+}
+
+// ctrl+h climbs one level at a time and stops at "##".
+func TestJumpParentSectionAscends(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	m.JumpNextSectionOfLevel(2)
+	m.JumpChildSection()
+	m.JumpChildSection() // Alpha deep
+
+	for _, w := range []string{"heading:Alpha sub", "heading:Alpha"} {
+		m.JumpParentSection(2)
+		if got := m.cursorKind(); got != w {
+			t.Fatalf("expected %s, got %s", w, got)
+		}
+	}
+
+	m.JumpParentSection(2)
+	if got := m.cursorKind(); got != "heading:Alpha" {
+		t.Errorf("expected ## to be the ceiling, got %s", got)
+	}
+}
+
+// From a task, the parent is the heading the task lives under.
+func TestJumpParentSectionFromTask(t *testing.T) {
+	m := newScrollList(t, levelFixture, 40)
+	for m.cursorKind() != "task:deep task" {
+		before := m.cursor
+		m.MoveDown()
+		if m.cursor == before {
+			t.Fatal("never reached the deep task")
+		}
+	}
+
+	m.JumpParentSection(2)
+	if got := m.cursorKind(); got != "heading:Alpha deep" {
+		t.Errorf("expected the enclosing heading, got %s", got)
+	}
+}
+
+// A heading nested under a skipped level still finds its nearest ancestor.
+func TestJumpParentSectionWithSkippedLevels(t *testing.T) {
+	content := "## Alpha\n- [ ] alpha task\n#### Deep\n- [ ] deep task\n"
+	m := newScrollList(t, content, 40)
+	for m.cursorKind() != "heading:Deep" {
+		m.JumpNextSection()
+	}
+
+	m.JumpParentSection(2)
+	if got := m.cursorKind(); got != "heading:Alpha" {
+		t.Errorf("expected Alpha, got %s", got)
+	}
+}
+
 func TestSelectedSectionLine(t *testing.T) {
 	m := newScrollList(t, headingFixture, 30)
 	if got := m.SelectedSectionLine(); got != -1 {

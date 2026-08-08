@@ -22,6 +22,8 @@ func helpContent() string {
 		{"Navigation", []ui.HelpItem{
 			{"j / k, ↓ / ↑", "Move down / up"},
 			{"tab / S-tab", "Select next / prev heading (or J / K)"},
+			{"ctrl+j/ctrl+k", "Select next / prev ## heading only"},
+			{"ctrl+h/ctrl+l", "Select parent / child heading"},
 			{"gg / G", "Jump to top / bottom"},
 			{"ctrl+d/ctrl+u", "Page down / up"},
 			{"alt+j / alt+k", "Move task down / up in its group"},

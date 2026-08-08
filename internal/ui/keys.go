@@ -30,6 +30,16 @@ const (
 	KeyMoveToNextSection = "alt+J"
 	KeyMoveToPrevSection = "alt+K"
 
+	// Step between "##" headings only, skipping deeper sub-headings. ctrl+j is
+	// LF and ctrl+k is VT, both distinct from Enter (CR), so neither collides.
+	KeyMajorSectionNext = "ctrl+j"
+	KeyMajorSectionPrev = "ctrl+k"
+
+	// Move between heading levels. ctrl+h is BS (8), distinct from Backspace
+	// (DEL 127), so it does not disturb the text input.
+	KeyParentSection = "ctrl+h"
+	KeyChildSection  = "ctrl+l"
+
 	KeyQuit   = "q"
 	KeyHelp   = "?"
 	KeyDone   = "d"

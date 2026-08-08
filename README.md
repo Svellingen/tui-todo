@@ -51,7 +51,9 @@ todo
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `↓` / `↑` | Move down / up |
-| `tab` / `shift+tab` | Select the next / previous heading |
+| `tab` / `shift+tab` | Select the next / previous heading, any level |
+| `ctrl+j` / `ctrl+k` | Select the next / previous `##` heading, skipping deeper ones |
+| `ctrl+h` / `ctrl+l` | Select the parent / first child heading |
 | `J` / `K` | Same jump, vim-style |
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
@@ -132,7 +134,27 @@ well as top-level ones.
 ### Selecting headings
 
 `tab` and `shift+tab` select headings themselves; `j` and `k` step over them
-between tasks. With a heading selected:
+between tasks. `ctrl+j` and `ctrl+k` do the same as `tab`, but stop only at
+`##` headings — handy for moving between major sections in a file with a lot
+of sub-headings. A `#` title is a different level, so it is not one of their
+stops; `tab` still reaches it.
+
+`ctrl+h` and `ctrl+l` move across levels rather than along one. `ctrl+l`
+descends to the first sub-heading nested under the current one, and `ctrl+h`
+climbs back to its parent. Together with `ctrl+j`/`ctrl+k` that gives you the
+whole tree: across `##` sections, then down into their sub-headings.
+
+- `ctrl+h` from a task selects the heading the task lives under, so it doubles
+  as "where am I?".
+- `ctrl+h` stops at `##`; pressing it there does nothing.
+- `ctrl+l` does nothing on a task, or on a heading with no sub-headings.
+- Levels may be skipped in the file — a `####` directly under a `##` still
+  finds that `##` as its parent.
+
+Note that `ctrl+h` acts as backspace inside the add, edit and search prompts,
+which is the usual terminal convention.
+
+With a heading selected:
 
 - `a` adds a task directly beneath it rather than in the Backlog section.
   From a task, `a` instead adds directly below that task, keeping it in the

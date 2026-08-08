@@ -95,10 +95,33 @@ func (m TaskInputModel) Value() string {
 }
 
 // Update forwards messages to the textinput model.
+// Update feeds a message to the text input.
+//
+// Runes that arrive in a single read come as one message, and bubbles matches
+// its key bindings on the message's name -- so text containing "up" or "down"
+// would be taken for suggestion navigation and swallowed. Splitting a
+// multi-rune message into one message per rune keeps it as text; no binding is
+// a single character.
 func (m *TaskInputModel) Update(msg tea.Msg) tea.Cmd {
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return cmd
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok || keyMsg.Type != tea.KeyRunes || len(keyMsg.Runes) <= 1 {
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return cmd
+	}
+
+	var cmds []tea.Cmd
+	for _, r := range keyMsg.Runes {
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(tea.KeyMsg{
+			Type:  tea.KeyRunes,
+			Runes: []rune{r},
+			Alt:   keyMsg.Alt,
+			Paste: keyMsg.Paste,
+		})
+		cmds = append(cmds, cmd)
+	}
+	return tea.Batch(cmds...)
 }
 
 // View renders the text input.

@@ -18,6 +18,10 @@ import (
 
 const maxUndoStack = 20
 
+// majorHeadingLevel is the "##" level that ctrl+j / ctrl+k step between,
+// skipping both the "#" title and any deeper sub-headings.
+const majorHeadingLevel = 2
+
 // watchInterval is how often the task file is polled for outside edits. This
 // is only the fallback for when a filesystem watch cannot be established.
 const watchInterval = time.Second
@@ -406,8 +410,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if a.mode == modeHelp {
-		switch key {
-		case ui.KeyHelp, "esc":
+		if key == ui.KeyHelp || msg.Type == tea.KeyEsc {
 			a.mode = modeNormal
 		}
 		return a, nil
@@ -423,14 +426,17 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if a.tagCursor > 0 {
 				a.tagCursor--
 			}
-		case "enter":
+		}
+
+		switch msg.Type {
+		case tea.KeyEnter:
 			if a.tagCursor >= 0 && a.tagCursor < len(a.tagOptions) {
 				a.list.SetTagFilter(a.tagOptions[a.tagCursor])
 			}
 			a.mode = modeNormal
 			a.tagOptions = nil
 			a.updateListSize()
-		case "esc":
+		case tea.KeyEsc:
 			a.mode = modeNormal
 			a.tagOptions = nil
 			a.updateListSize()
@@ -439,10 +445,13 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if a.mode == modeInput {
-		switch key {
-		case "enter":
+		// Match on the key type, not its name: bubbletea folds runes that
+		// arrive in one read into a single message, so typing or pasting the
+		// word "enter" would otherwise read as the Enter key and commit.
+		switch msg.Type {
+		case tea.KeyEnter:
 			return a.commitInput()
-		case "esc":
+		case tea.KeyEsc:
 			if a.input.Mode() == inputSearch {
 				a.list.ClearSearch()
 			}
@@ -486,6 +495,14 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.list.JumpNextSection()
 	case ui.KeySectionUp, ui.KeySectionPrev:
 		a.list.JumpPrevSection()
+	case ui.KeyMajorSectionNext:
+		a.list.JumpNextSectionOfLevel(majorHeadingLevel)
+	case ui.KeyMajorSectionPrev:
+		a.list.JumpPrevSectionOfLevel(majorHeadingLevel)
+	case ui.KeyParentSection:
+		a.list.JumpParentSection(majorHeadingLevel)
+	case ui.KeyChildSection:
+		a.list.JumpChildSection()
 	case ui.KeyMoveDown:
 		return a.moveTask(1)
 	case ui.KeyMoveUp:
