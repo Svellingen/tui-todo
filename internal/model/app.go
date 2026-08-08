@@ -894,15 +894,17 @@ func (a App) doDeleteSection() (tea.Model, tea.Cmd) {
 	if !a.taskFile.DeleteSection(line) {
 		return a, nil
 	}
-	a.list.RestoreCursorNear(pos)
 
-	msg, cmd := flash("Deleted: " + span.Name + "  (u to undo)")
+	msg, cmd := flash("Deleted: " + span.Name)
 	a.statusMsg = msg
-	return a, tea.Batch(a.save(), cmd)
+	// Save first: it may re-sort and rebuild, which would move the cursor.
+	saveCmd := a.save()
+	a.list.SelectPrecedingItem(pos - 1)
+	return a, tea.Batch(saveCmd, cmd)
 }
 
-// doDelete removes the selected task outright. There is no confirmation step:
-// the undo stack makes the deletion recoverable, so the flash points at it.
+// doDelete removes the selected task outright. There is no confirmation step;
+// "u" undoes it.
 func (a App) doDelete() (tea.Model, tea.Cmd) {
 	idx := a.list.SelectedTaskIndex()
 	if idx < 0 {
@@ -910,7 +912,7 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	}
 
 	a.pushUndo("delete")
-	title := a.taskFile.Tasks[idx].Title
+	pos := a.list.Cursor()
 
 	a.taskFile.Tasks = append(a.taskFile.Tasks[:idx], a.taskFile.Tasks[idx+1:]...)
 
@@ -926,11 +928,12 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	}
 	a.taskFile.Lines = newLines
 
-	a.list.rebuildItems()
+	// Save first: it may re-sort and rebuild, which would move the cursor.
+	cmd := a.save()
+	a.list.SelectPrecedingItem(pos - 1)
 
-	msg, cmd := flash("Deleted: " + title + "  (u to undo)")
-	a.statusMsg = msg
-	return a, tea.Batch(a.save(), cmd)
+	// No flash: the task vanishing from the list says it plainly enough.
+	return a, cmd
 }
 
 func (a App) addTag() (tea.Model, tea.Cmd) {

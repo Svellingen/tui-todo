@@ -475,9 +475,14 @@ func (m *TaskListModel) SelectTask(taskIndex int) {
 	}
 }
 
-// RestoreCursorNear rebuilds the list and puts the cursor as close to pos as
-// the new contents allow, used after a deletion changes the item count.
-func (m *TaskListModel) RestoreCursorNear(pos int) {
+// SelectPrecedingItem rebuilds the list and puts the cursor on the nearest
+// selectable item at or before pos.
+//
+// After a deletion, callers pass the index just above what was removed, so the
+// cursor settles on the previous sibling -- or on the enclosing heading when
+// the deleted item was the first thing under it. Only when nothing precedes it
+// does the cursor fall back to the top of the list.
+func (m *TaskListModel) SelectPrecedingItem(pos int) {
 	m.rebuildItems()
 	if len(m.items) == 0 {
 		return
@@ -485,17 +490,15 @@ func (m *TaskListModel) RestoreCursorNear(pos int) {
 	if pos >= len(m.items) {
 		pos = len(m.items) - 1
 	}
-	if pos < 0 {
-		pos = 0
-	}
-	for i := pos; i < len(m.items); i++ {
+
+	for i := pos; i >= 0; i-- {
 		if m.items[i].kind != itemBlank {
 			m.cursor = i
 			m.adjustScroll()
 			return
 		}
 	}
-	for i := pos; i >= 0; i-- {
+	for i := range m.items {
 		if m.items[i].kind != itemBlank {
 			m.cursor = i
 			m.adjustScroll()
