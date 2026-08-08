@@ -61,7 +61,7 @@ todo
 | `e` | Edit task title |
 | `d` | Toggle done |
 | `x` | Delete task (with confirmation) |
-| `s` | Cycle status (todo / in-progress / done) |
+| `Space` | Cycle status (todo / in-progress / done) |
 | `p` | Cycle priority (none / low / medium / high) |
 | `t` | Add tag to task |
 | `u` | Undo last action |

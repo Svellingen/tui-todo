@@ -18,7 +18,8 @@ const (
 	KeyAdd    = "a"
 	KeyEdit   = "e"
 	KeyDelete = "x"
-	KeyStatus = "s"
+	// KeyStatus is the space bar; bubbletea reports it as a single space.
+	KeyStatus = " "
 	KeyPrio   = "p"
 	KeyUndo   = "u"
 

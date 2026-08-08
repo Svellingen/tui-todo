@@ -29,7 +29,7 @@ func helpContent() string {
 			{"e", "Edit task title"},
 			{"d", "Toggle done"},
 			{"x", "Delete task"},
-			{"s", "Cycle status"},
+			{"Space", "Cycle status"},
 			{"p", "Cycle priority"},
 			{"t", "Add tag"},
 			{"u", "Undo"},
