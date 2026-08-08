@@ -15,7 +15,7 @@ Or build from source:
 ```bash
 git clone https://github.com/macone/todo-cli.git
 cd todo-cli
-make build
+just build
 # Binary at ./bin/todo
 ```
 
@@ -135,11 +135,13 @@ show_done = true
 ## Development
 
 ```bash
-make build    # Build binary
-make test     # Run tests
-make lint     # Run go vet
-make clean    # Remove build artifacts
-make release  # Cross-compile for all platforms
+just          # List available recipes
+just build    # Build binary
+just run      # Build and run
+just test     # Run tests
+just lint     # Run go vet
+just clean    # Remove build artifacts
+just release  # Cross-compile for all platforms
 ```
 
 ## License
