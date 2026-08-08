@@ -112,6 +112,22 @@ If nothing is found, commands that write (`add`) create `tasks.md` in the
 current directory. `todo init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
 
+## Headings
+
+Headings of every level (`#` through `######`) are parsed and shown as written,
+coloured by level:
+
+| Level | Colour |
+|-------|--------|
+| `#` | blue |
+| `##` | amber |
+| `###` | green |
+| `####` | teal |
+
+Levels beyond the fourth cycle back through the same four colours. Every
+heading starts a new section, so tasks group and sort under sub-headings as
+well as top-level ones.
+
 ## Sorting
 
 Tasks are kept sorted inside each section, top to bottom:

@@ -27,7 +27,6 @@ var (
 var (
 	TitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(ColorPurple)
 	SectionHeader  = lipgloss.NewStyle().Bold(true).Foreground(ColorBlue)
-	SectionSep     = lipgloss.NewStyle().Foreground(ColorDimGray)
 	CursorStyle    = lipgloss.NewStyle().Foreground(ColorPurple).Bold(true)
 	SelectedTask   = lipgloss.NewStyle().Bold(true).Foreground(ColorWhite)
 	PriorityHigh   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
@@ -50,6 +49,24 @@ var (
 	EmptyState     = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
 	FilterBadge    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
 )
+
+// Heading colours, sampled from the reference nvim rendering of the same file.
+// Levels beyond the list cycle back through it.
+var headingColors = []lipgloss.AdaptiveColor{
+	{Light: "#3B6FD4", Dark: "#7AA1F4"}, // #    blue
+	{Light: "#A8712A", Dark: "#DDAE69"}, // ##   amber
+	{Light: "#5A9134", Dark: "#9DCC6B"}, // ###  green
+	{Light: "#12806B", Dark: "#1CB99B"}, // #### teal
+}
+
+// HeadingStyle returns the style for a heading of the given level (1-based).
+func HeadingStyle(level int) lipgloss.Style {
+	if level < 1 {
+		level = 1
+	}
+	c := headingColors[(level-1)%len(headingColors)]
+	return lipgloss.NewStyle().Bold(true).Foreground(c)
+}
 
 // AlignLR left-right aligns two strings within a given width.
 func AlignLR(left, right string, width int) string {

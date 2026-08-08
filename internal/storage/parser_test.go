@@ -199,6 +199,82 @@ func TestParseLegacyPriorityToken(t *testing.T) {
 	}
 }
 
+func TestParseHeadingLevels(t *testing.T) {
+	cases := []struct {
+		line  string
+		level int
+		name  string
+	}{
+		{"# top", 1, "top"},
+		{"## second", 2, "second"},
+		{"### third", 3, "third"},
+		{"#### fourth", 4, "fourth"},
+		{"###### sixth", 6, "sixth"},
+		{"##   extra spaces  ", 2, "extra spaces"},
+		// Not headings:
+		{"####### too deep", 0, ""},
+		{"#no-space", 0, ""},
+		{"#", 0, ""},
+		{"plain text", 0, ""},
+		{"- [ ] a task", 0, ""},
+	}
+
+	for _, c := range cases {
+		level, name := ParseHeading(c.line)
+		if level != c.level || name != c.name {
+			t.Errorf("%q: got (%d, %q), want (%d, %q)", c.line, level, name, c.level, c.name)
+		}
+	}
+}
+
+// Every heading level becomes a section, so tasks group under sub-headers too.
+func TestParseAllHeadingLevelsBecomeSections(t *testing.T) {
+	input := "# Top\n" +
+		"- [ ] top task\n" +
+		"## Second\n" +
+		"- [ ] second task\n" +
+		"### Third\n" +
+		"- [ ] third task\n" +
+		"#### Fourth\n" +
+		"- [ ] fourth task\n"
+
+	tf, err := NewParser().Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []struct {
+		name  string
+		level int
+	}{
+		{"Top", 1}, {"Second", 2}, {"Third", 3}, {"Fourth", 4},
+	}
+	if len(tf.Sections) != len(want) {
+		t.Fatalf("expected %d sections, got %d", len(want), len(tf.Sections))
+	}
+	for i, w := range want {
+		if tf.Sections[i].Name != w.name || tf.Sections[i].Level != w.level {
+			t.Errorf("section %d: got (%q, %d), want (%q, %d)",
+				i, tf.Sections[i].Name, tf.Sections[i].Level, w.name, w.level)
+		}
+	}
+	if len(tf.Tasks) != 4 {
+		t.Errorf("expected 4 tasks, got %d", len(tf.Tasks))
+	}
+}
+
+// Headings of any level round-trip untouched.
+func TestWriteRoundtripAllHeadingLevels(t *testing.T) {
+	input := "# Top\n\n## Second\n\n- [ ] !! a task\n\n### Third\n\n#### Fourth\n\n- [ ] another\n"
+	tf, err := NewParser().Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := NewWriter().Write(tf); got != input {
+		t.Errorf("expected:\n%s\ngot:\n%s", input, got)
+	}
+}
+
 func TestParsePreservesNonTaskLines(t *testing.T) {
 	input := "# My Project\n\nSome notes here.\n\n## Backlog\n\n- [ ] A task\n\n## Done\n\n- [x] Finished\n"
 	p := NewParser()

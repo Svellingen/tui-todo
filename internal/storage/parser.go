@@ -26,11 +26,33 @@ type Line struct {
 	TaskIndex int // Index into TaskFile.Tasks, or -1 if not a task line
 }
 
-// Section represents a status section in the markdown file.
+// Section represents a heading in the markdown file.
 type Section struct {
 	Name   string
+	Level  int // 1 for "#", 2 for "##", and so on
 	Status task.Status
 	Line   int // Line number of the section header
+}
+
+// maxHeadingLevel is the deepest ATX heading markdown defines.
+const maxHeadingLevel = 6
+
+// ParseHeading splits an ATX heading into its level and text. Level is 0 when
+// the line is not a heading.
+func ParseHeading(trimmed string) (level int, name string) {
+	for level < len(trimmed) && trimmed[level] == '#' {
+		level++
+	}
+	if level == 0 || level > maxHeadingLevel {
+		return 0, ""
+	}
+	rest := trimmed[level:]
+	// A heading needs whitespace after the hashes, otherwise "#tag" would
+	// count as one.
+	if rest == "" || (rest[0] != ' ' && rest[0] != '\t') {
+		return 0, ""
+	}
+	return level, strings.TrimSpace(rest)
 }
 
 // TaskFile holds the parsed contents of a tasks.md file.
@@ -74,14 +96,14 @@ func (p *Parser) Parse(content string) (*TaskFile, error) {
 
 		trimmed := strings.TrimSpace(raw)
 
-		// Check for section header: ## SectionName
-		if strings.HasPrefix(trimmed, "## ") {
-			sectionName := strings.TrimPrefix(trimmed, "## ")
+		// Check for a heading of any level: #, ##, ### ...
+		if level, sectionName := ParseHeading(trimmed); level > 0 {
 			status := sectionNameToStatus(sectionName)
 			currentStatus = status
 			line.Type = LineSection
 			tf.Sections = append(tf.Sections, Section{
 				Name:   sectionName,
+				Level:  level,
 				Status: status,
 				Line:   lineNum,
 			})

@@ -69,7 +69,7 @@ func TestScrollBackToTopShowsHeaders(t *testing.T) {
 	}
 
 	lines := m.ViewLines(80, 10)
-	if len(lines) == 0 || !strings.Contains(lines[0], "ALPHA") {
+	if len(lines) == 0 || !strings.Contains(lines[0], "## Alpha") {
 		t.Errorf("expected the first header on the first line, got %q", lines[0])
 	}
 }
@@ -98,8 +98,8 @@ func TestScrollUpRevealsSectionHeader(t *testing.T) {
 	}
 
 	joined := strings.Join(m.ViewLines(80, 8), "\n")
-	if !strings.Contains(joined, "BETA") {
-		t.Errorf("expected the BETA header to be visible, got:\n%s", joined)
+	if !strings.Contains(joined, "## Beta") {
+		t.Errorf("expected the Beta header to be visible, got:\n%s", joined)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestScrollDoesNotOverrunTheEnd(t *testing.T) {
 	m := newScrollList(t, scrollFixture(40), height)
 	m.toBottom()
 
-	total := len(m.buildAllLines(80))
+	total := len(m.buildAllLines())
 	if m.scrollOffset+height > total {
 		t.Errorf("scrollOffset %d + height %d exceeds %d rendered lines",
 			m.scrollOffset, height, total)
@@ -148,11 +148,11 @@ func TestScrollAtEndShowsTrailingContent(t *testing.T) {
 	m.toBottom()
 
 	joined := strings.Join(m.ViewLines(80, 10), "\n")
-	if !strings.Contains(joined, "OMEGA") {
-		t.Errorf("expected the trailing OMEGA header to be visible, got:\n%s", joined)
+	if !strings.Contains(joined, "## Omega") {
+		t.Errorf("expected the trailing Omega header to be visible, got:\n%s", joined)
 	}
 
-	total := len(m.buildAllLines(80))
+	total := len(m.buildAllLines())
 	if m.scrollOffset+10 != total {
 		t.Errorf("expected the last line on screen: offset %d + 10 != %d", m.scrollOffset, total)
 	}

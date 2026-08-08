@@ -357,27 +357,9 @@ func (m *TaskListModel) SetSize(w, h int) {
 
 // itemLineStarts returns, for each item, the rendered line its block begins
 // on. A section's block starts at the blank line separating it from the
-// previous section, so scrolling to it brings the whole header into view.
-//
-// This mirrors the layout in buildAllLines; the two must stay in step.
+// previous section, so scrolling to it brings the header into view.
 func (m TaskListModel) itemLineStarts() []int {
-	starts := make([]int, len(m.items))
-	idx := 0
-	isFirstSection := true
-
-	for i, it := range m.items {
-		starts[i] = idx
-		switch it.kind {
-		case itemSection:
-			if !isFirstSection {
-				idx++ // blank line between sections
-			}
-			isFirstSection = false
-			idx += 2 // header + separator
-		case itemTask:
-			idx++
-		}
-	}
+	_, starts := m.buildLines()
 	return starts
 }
 
@@ -398,9 +380,9 @@ func (m *TaskListModel) adjustScroll() {
 		return
 	}
 
-	starts := m.itemLineStarts()
+	lines, starts := m.buildLines()
 	curLine := starts[m.cursor]
-	total := len(m.buildAllLines(m.width))
+	total := len(lines)
 
 	// Scrolling up: reveal the header block above the cursor rather than
 	// parking the cursor on the top row with its section cut off.
@@ -497,14 +479,32 @@ func (m TaskListModel) ProgressCounts() (done, total int) {
 	return
 }
 
-// buildAllLines builds all rendered lines for the task list.
-func (m TaskListModel) buildAllLines(innerWidth int) []string {
+// renderHeading draws a markdown heading the way the file writes it, coloured
+// by level.
+func renderHeading(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	level, name := storage.ParseHeading(trimmed)
+	if level == 0 {
+		return ui.HeadingStyle(1).Render(trimmed)
+	}
+	return ui.HeadingStyle(level).Render(strings.Repeat("#", level) + " " + name)
+}
+
+// buildLines renders the list and records, for each item, the line its block
+// starts on.
+//
+// Both come from a single pass on purpose: the scroll maths depends on knowing
+// exactly how many lines each item draws, and computing that separately is how
+// the two drift apart.
+func (m TaskListModel) buildLines() (lines []string, starts []int) {
+	starts = make([]int, len(m.items))
+
 	if m.taskFile == nil || len(m.taskFile.Tasks) == 0 {
 		return []string{
 			"",
 			"  " + ui.EmptyState.Render("No tasks yet. Press 'a' to add one."),
 			"",
-		}
+		}, starts
 	}
 
 	hasVisible := false
@@ -519,28 +519,21 @@ func (m TaskListModel) buildAllLines(innerWidth int) []string {
 			"",
 			"  " + ui.EmptyState.Render("No matching tasks."),
 			"",
-		}
+		}, starts
 	}
 
-	var lines []string
 	isFirstSection := true
 
 	for i, it := range m.items {
+		starts[i] = len(lines)
+
 		switch it.kind {
 		case itemSection:
 			if !isFirstSection {
 				lines = append(lines, "")
 			}
 			isFirstSection = false
-
-			name := extractSectionName(it.section)
-			lines = append(lines, "  "+ui.SectionHeader.Render(strings.ToUpper(name)))
-
-			sepWidth := innerWidth - 4
-			if sepWidth < 10 {
-				sepWidth = 10
-			}
-			lines = append(lines, "  "+ui.SectionSep.Render(strings.Repeat("─", sepWidth)))
+			lines = append(lines, "  "+renderHeading(it.section))
 
 		case itemTask:
 			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor))
@@ -550,12 +543,18 @@ func (m TaskListModel) buildAllLines(innerWidth int) []string {
 		}
 	}
 
+	return lines, starts
+}
+
+// buildAllLines builds all rendered lines for the task list.
+func (m TaskListModel) buildAllLines() []string {
+	lines, _ := m.buildLines()
 	return lines
 }
 
 // ViewLines returns rendered lines, clipped to maxLines with scrolling.
 func (m TaskListModel) ViewLines(innerWidth, maxLines int) []string {
-	allLines := m.buildAllLines(innerWidth)
+	allLines := m.buildAllLines()
 
 	if maxLines <= 0 || len(allLines) <= maxLines {
 		return allLines
@@ -695,9 +694,3 @@ func (m TaskListModel) SelectedTaskIndex() int {
 	return it.taskIndex
 }
 
-func extractSectionName(raw string) string {
-	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "## ")
-	s = strings.TrimPrefix(s, "# ")
-	return strings.TrimSpace(s)
-}
