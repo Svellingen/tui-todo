@@ -16,6 +16,12 @@ const (
 	KeySectionNext = "tab"
 	KeySectionPrev = "shift+tab"
 
+	// vim-style paging. KeyTop is a prefix: pressed twice it jumps to the top.
+	KeyTop      = "g"
+	KeyBottom   = "G"
+	KeyPageDown = "ctrl+d"
+	KeyPageUp   = "ctrl+u"
+
 	// Reorder the selected task within its sort group.
 	KeyMoveUp   = "alt+k"
 	KeyMoveDown = "alt+j"

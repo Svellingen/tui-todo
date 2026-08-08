@@ -234,6 +234,92 @@ func (m *TaskListModel) MoveUp() {
 	}
 }
 
+// MoveToTop puts the cursor on the first task.
+func (m *TaskListModel) MoveToTop() {
+	for i := range m.items {
+		if m.items[i].kind == itemTask {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// MoveToBottom puts the cursor on the last task.
+func (m *TaskListModel) MoveToBottom() {
+	for i := len(m.items) - 1; i >= 0; i-- {
+		if m.items[i].kind == itemTask {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// pageStep is how far ctrl+d and ctrl+u travel: half a viewport, as in vim.
+func (m TaskListModel) pageStep() int {
+	if m.height < 2 {
+		return 1
+	}
+	return m.height / 2
+}
+
+// PageDown moves the cursor to the furthest task within half a viewport below.
+func (m *TaskListModel) PageDown() {
+	starts := m.itemLineStarts()
+	if m.cursor < 0 || m.cursor >= len(starts) {
+		return
+	}
+	target := starts[m.cursor] + m.pageStep()
+
+	next := m.cursor
+	for i := m.cursor + 1; i < len(m.items); i++ {
+		if m.items[i].kind != itemTask {
+			continue
+		}
+		if starts[i] > target {
+			break
+		}
+		next = i
+	}
+
+	if next == m.cursor {
+		// The next task is more than a page away; still advance by one so the
+		// key never feels dead.
+		m.MoveDown()
+		return
+	}
+	m.cursor = next
+	m.adjustScroll()
+}
+
+// PageUp moves the cursor to the furthest task within half a viewport above.
+func (m *TaskListModel) PageUp() {
+	starts := m.itemLineStarts()
+	if m.cursor < 0 || m.cursor >= len(starts) {
+		return
+	}
+	target := starts[m.cursor] - m.pageStep()
+
+	prev := m.cursor
+	for i := m.cursor - 1; i >= 0; i-- {
+		if m.items[i].kind != itemTask {
+			continue
+		}
+		if starts[i] < target {
+			break
+		}
+		prev = i
+	}
+
+	if prev == m.cursor {
+		m.MoveUp()
+		return
+	}
+	m.cursor = prev
+	m.adjustScroll()
+}
+
 func (m *TaskListModel) JumpNextSection() {
 	for i := m.cursor + 1; i < len(m.items); i++ {
 		if m.items[i].kind == itemSection {

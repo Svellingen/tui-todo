@@ -53,6 +53,8 @@ todo
 | `↓` / `↑` | Move down / up |
 | `tab` / `shift+tab` | Jump to the first task of the next / previous section |
 | `J` / `K` | Same jump, vim-style |
+| `gg` / `G` | Jump to the first / last task |
+| `ctrl+d` / `ctrl+u` | Page down / up |
 | `alt+j` / `alt+k` | Move the selected task down / up within its sort group |
 
 ### Actions

@@ -83,6 +83,9 @@ type App struct {
 	// showFilename swaps the title bar between the app name and the task
 	// file's path. Off by default; toggled with "i" and not persisted.
 	showFilename bool
+
+	// pendingG records a bare "g", waiting to see whether it becomes "gg".
+	pendingG bool
 }
 
 func NewApp(store *storage.Store) App {
@@ -451,6 +454,19 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// "g" is a prefix: a second "g" jumps to the top, anything else falls
+	// through and is handled on its own.
+	if a.pendingG {
+		a.pendingG = false
+		if key == ui.KeyTop {
+			a.list.MoveToTop()
+			return a, nil
+		}
+	} else if key == ui.KeyTop {
+		a.pendingG = true
+		return a, nil
+	}
+
 	switch key {
 	case "ctrl+c":
 		return a, tea.Quit
@@ -468,6 +484,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.moveTask(1)
 	case ui.KeyMoveUp:
 		return a.moveTask(-1)
+	case ui.KeyBottom:
+		a.list.MoveToBottom()
+	case ui.KeyPageDown:
+		a.list.PageDown()
+	case ui.KeyPageUp:
+		a.list.PageUp()
 	case ui.KeyDone:
 		return a.toggleDone()
 	case ui.KeyAdd:

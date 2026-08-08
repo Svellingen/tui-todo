@@ -175,6 +175,67 @@ func TestScrollAtEndKeepsCursorVisibleWithLongTail(t *testing.T) {
 	}
 }
 
+func TestMoveToTopAndBottom(t *testing.T) {
+	m := newScrollList(t, scrollFixture(40), 10)
+	first := m.cursor
+
+	m.MoveToBottom()
+	if m.isLastTask() != true {
+		t.Error("expected the cursor on the last task")
+	}
+	if m.scrollOffset == 0 {
+		t.Error("expected the view to have scrolled to the bottom")
+	}
+
+	m.MoveToTop()
+	if m.cursor != first {
+		t.Errorf("expected the cursor back on the first task %d, got %d", first, m.cursor)
+	}
+	if m.scrollOffset != 0 {
+		t.Errorf("expected scrollOffset 0, got %d", m.scrollOffset)
+	}
+}
+
+// A page is half a viewport, as in vim, and the two directions are symmetric.
+func TestPageDownAndUp(t *testing.T) {
+	const height = 10
+	m := newScrollList(t, scrollFixture(60), height)
+
+	starts := m.itemLineStarts()
+	start := starts[m.cursor]
+
+	m.PageDown()
+	starts = m.itemLineStarts()
+	moved := starts[m.cursor] - start
+	if moved <= 0 || moved > height/2 {
+		t.Errorf("expected a move of 1..%d lines, got %d", height/2, moved)
+	}
+
+	m.PageUp()
+	starts = m.itemLineStarts()
+	if got := starts[m.cursor]; got != start {
+		t.Errorf("expected to page back to line %d, got %d", start, got)
+	}
+}
+
+func TestPagingStopsAtTheEnds(t *testing.T) {
+	m := newScrollList(t, scrollFixture(30), 8)
+
+	for range 50 {
+		m.PageDown()
+	}
+	if !m.isLastTask() {
+		t.Error("expected paging down to settle on the last task")
+	}
+
+	for range 50 {
+		m.PageUp()
+	}
+	if m.scrollOffset != 0 {
+		t.Errorf("expected paging up to reach the top, got offset %d", m.scrollOffset)
+	}
+}
+
 // A list shorter than the viewport never scrolls.
 func TestScrollStaysAtZeroForShortLists(t *testing.T) {
 	m := newScrollList(t, scrollFixture(2), 40)
