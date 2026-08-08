@@ -106,6 +106,28 @@ If nothing is found, commands that write (`add`) create `tasks.md` in the
 current directory. `todo init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
 
+## Outside Edits
+
+The TUI watches the task file and reloads it the moment it changes on disk, so
+editing `tasks.md` in another editor shows up without restarting. Active
+filters and the cursor position are preserved where possible.
+
+The watch is on the file's directory rather than the file itself, so it keeps
+working with editors that save atomically by writing a temp file and renaming
+it into place. If a filesystem watch cannot be established — an exhausted
+inotify limit, or a filesystem without notification support — the app falls
+back to polling once a second.
+
+Because a reload replaces the in-memory state, the undo history is cleared —
+replaying it would discard the outside edit. If the file changes while you have
+a modal open (add, edit, delete confirmation), the reload waits until you are
+back at the list.
+
+Nothing is overwritten silently: if the file changed underneath since the app
+last read it, the outside edit wins. The app reloads and reports `File changed
+on disk — reloaded, change not applied` rather than clobbering it. Deleting the
+file does not blank the list; recreating it is picked up on the next poll.
+
 ## File Format
 
 Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:

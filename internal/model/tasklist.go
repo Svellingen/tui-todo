@@ -69,6 +69,32 @@ func (m *TaskListModel) rebuildItems() {
 	m.scrollOffset = 0
 }
 
+// Reload swaps in freshly parsed content, keeping the active filters and
+// leaving the cursor on the same task where that task still exists.
+func (m *TaskListModel) Reload(tf *storage.TaskFile) {
+	var selected string
+	if t := m.SelectedTaskItem(); t != nil {
+		selected = t.Title
+	}
+
+	m.taskFile = tf
+	m.rebuildItems()
+
+	if selected == "" {
+		return
+	}
+	for i, it := range m.items {
+		if it.kind != itemTask || it.taskIndex >= len(tf.Tasks) {
+			continue
+		}
+		if tf.Tasks[it.taskIndex].Title == selected {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
 func (m *TaskListModel) taskVisible(idx int) bool {
 	if idx < 0 || idx >= len(m.taskFile.Tasks) {
 		return false

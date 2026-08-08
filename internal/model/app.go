@@ -1,6 +1,7 @@
 package model
 
 import (
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,25 @@ import (
 )
 
 const maxUndoStack = 20
+
+// watchInterval is how often the task file is polled for outside edits. This
+// is only the fallback for when a filesystem watch cannot be established.
+const watchInterval = time.Second
+
+// fileStamp is a cheap fingerprint of the task file, used to skip parsing when
+// nothing has changed. The zero value stands for "file does not exist".
+type fileStamp struct {
+	modUnixNano int64
+	size        int64
+}
+
+func statFile(path string) (fileStamp, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileStamp{}, err
+	}
+	return fileStamp{modUnixNano: info.ModTime().UnixNano(), size: info.Size()}, nil
+}
 
 type appMode int
 
@@ -45,6 +65,18 @@ type App struct {
 	statusMsg  string
 	tagOptions []string
 	tagCursor  int
+
+	// stamp is the fingerprint of the task file as the app last saw it, so an
+	// outside edit can be told from the app's own writes.
+	stamp fileStamp
+
+	// watcher is nil when a filesystem watch could not be established, in
+	// which case the app falls back to polling.
+	watcher *fileWatcher
+
+	// pendingReload records a change that arrived while a modal was open, to
+	// be applied once the app is back at the list.
+	pendingReload bool
 }
 
 func NewApp(store *storage.Store) App {
@@ -60,12 +92,90 @@ func (a App) Init() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return loadedMsg{tf}
+		stamp, _ := statFile(a.store.FilePath)
+		return loadedMsg{tf: tf, stamp: stamp}
 	}
 }
 
-type loadedMsg struct{ tf *storage.TaskFile }
+type loadedMsg struct {
+	tf    *storage.TaskFile
+	stamp fileStamp
+}
 type errMsg struct{ err error }
+
+// watchTickMsg drives the fallback poll for outside edits.
+type watchTickMsg struct{}
+
+// fileChangedMsg reports that the filesystem watch saw the task file change.
+type fileChangedMsg struct{}
+
+// startWatch establishes a filesystem watch, falling back to polling when one
+// is unavailable -- an exhausted inotify limit, or a filesystem that does not
+// support notifications.
+func (a *App) startWatch() tea.Cmd {
+	w, err := newFileWatcher(a.store.FilePath)
+	if err != nil {
+		return watchTick()
+	}
+	a.watcher = w
+	return waitForChange(w)
+}
+
+// waitForChange blocks in a command until the next change to the task file.
+// Each change re-arms it, so exactly one of these is in flight at a time.
+func waitForChange(w *fileWatcher) tea.Cmd {
+	return func() tea.Msg {
+		if !w.wait() {
+			return nil
+		}
+		return fileChangedMsg{}
+	}
+}
+
+// reloadMsg carries the result of that check. A nil tf means the file changed
+// in a way that needs no new content -- only the stamp is refreshed.
+type reloadMsg struct {
+	tf    *storage.TaskFile
+	stamp fileStamp
+}
+
+func watchTick() tea.Cmd {
+	return tea.Tick(watchInterval, func(time.Time) tea.Msg { return watchTickMsg{} })
+}
+
+// checkReload compares the file on disk against the stamp the app last saw and
+// parses it when they differ. The app's own saves also move the stamp, so the
+// freshly parsed content is compared against what the app would write; if they
+// match, this was our own write and the list is left untouched.
+func (a App) checkReload() tea.Cmd {
+	s := a.store
+	known := a.stamp
+	current := storage.NewWriter().Write(a.taskFile)
+
+	return func() tea.Msg {
+		stamp, err := statFile(s.FilePath)
+		if err != nil {
+			// Gone or unreadable: keep what is in memory rather than blanking
+			// the list, but record the absence so a recreate is picked up.
+			if known == (fileStamp{}) {
+				return nil
+			}
+			return reloadMsg{stamp: fileStamp{}}
+		}
+		if stamp == known {
+			return nil
+		}
+
+		tf, err := s.Load()
+		if err != nil {
+			return errMsg{err}
+		}
+		if storage.NewWriter().Write(tf) == current {
+			return reloadMsg{stamp: stamp}
+		}
+		return reloadMsg{tf: tf, stamp: stamp}
+	}
+}
 
 func (a *App) pushUndo(desc string) {
 	w := storage.NewWriter()
@@ -76,15 +186,37 @@ func (a *App) pushUndo(desc string) {
 	}
 }
 
+// save writes the in-memory state to disk.
+//
+// If the file changed underneath since the app last read it, the outside edit
+// wins: rather than overwriting someone else's work, the app reloads and
+// reports that the in-app change was not applied.
+//
+// This runs synchronously rather than in a tea.Cmd so the stamp bookkeeping
+// cannot interleave with the watcher or with a second save; the task file is
+// small enough that the write is not worth deferring.
 func (a *App) save() tea.Cmd {
-	tf := a.taskFile
-	s := a.store
-	return func() tea.Msg {
-		if err := s.Save(tf); err != nil {
-			return errMsg{err}
+	if stamp, err := statFile(a.store.FilePath); err == nil && stamp != a.stamp {
+		disk, loadErr := a.store.Load()
+		if loadErr != nil {
+			a.err = loadErr
+			return nil
 		}
+		a.stamp = stamp
+		a.taskFile = disk
+		a.list.Reload(a.taskFile)
+		a.undoStack = nil
+		msg, cmd := flash("File changed on disk — reloaded, change not applied")
+		a.statusMsg = msg
+		return cmd
+	}
+
+	if err := a.store.Save(a.taskFile); err != nil {
+		a.err = err
 		return nil
 	}
+	a.stamp, _ = statFile(a.store.FilePath)
+	return nil
 }
 
 func flash(msg string) (string, tea.Cmd) {
@@ -116,9 +248,44 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case loadedMsg:
 		a.taskFile = msg.tf
+		a.stamp = msg.stamp
 		a.list = NewTaskListModel(a.taskFile)
 		a.updateListSize()
-		return a, nil
+		// Start watching only once there is content to compare against.
+		return a, a.startWatch()
+
+	case fileChangedMsg:
+		next := waitForChange(a.watcher)
+		// Skip the reload while a modal is open: an in-flight edit refers to a
+		// task index that may not survive it. Remember the change so it lands
+		// as soon as the app is back at the list.
+		if a.mode != modeNormal {
+			a.pendingReload = true
+			return a, next
+		}
+		return a, tea.Batch(next, a.checkReload())
+
+	case watchTickMsg:
+		if a.mode != modeNormal {
+			a.pendingReload = true
+			return a, watchTick()
+		}
+		return a, tea.Batch(watchTick(), a.checkReload())
+
+	case reloadMsg:
+		a.stamp = msg.stamp
+		if msg.tf == nil {
+			return a, nil
+		}
+		a.taskFile = msg.tf
+		a.list.Reload(a.taskFile)
+		// The snapshots describe a file that no longer exists on disk;
+		// replaying them would silently discard the outside edit.
+		a.undoStack = nil
+		a.updateListSize()
+		var cmd tea.Cmd
+		a.statusMsg, cmd = flash("Reloaded from disk")
+		return a, cmd
 
 	case errMsg:
 		a.err = msg.err
@@ -135,7 +302,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
-		return a.handleKey(msg)
+		next, cmd := a.handleKey(msg)
+		updated, ok := next.(App)
+		if !ok {
+			return next, cmd
+		}
+		// A change seen while a modal was open applies as soon as it closes.
+		if updated.pendingReload && updated.mode == modeNormal {
+			updated.pendingReload = false
+			return updated, tea.Batch(cmd, updated.checkReload())
+		}
+		return updated, cmd
 	}
 
 	return a, nil
