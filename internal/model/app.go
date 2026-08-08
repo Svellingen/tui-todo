@@ -98,13 +98,18 @@ type App struct {
 	// addAnchorLine is the Lines index the in-flight add was started from -- a
 	// heading or a task -- or -1 when nothing was selected.
 	addAnchorLine int
+
+	// inputAnchorItem is the list item the inline editor is drawn against, or
+	// -1 when no inline edit is open.
+	inputAnchorItem int
 }
 
 func NewApp(store *storage.Store) App {
 	return App{
-		store:         store,
-		input:         NewTaskInput(),
-		addAnchorLine: -1,
+		store:           store,
+		input:           NewTaskInput(),
+		addAnchorLine:   -1,
+		inputAnchorItem: -1,
 	}
 }
 
@@ -294,7 +299,13 @@ func flash(msg string) (string, tea.Cmd) {
 func (a App) chromeHeight() int {
 	overhead := 5
 	if a.mode == modeInput {
-		overhead++
+		switch a.input.Mode() {
+		case inputAdd:
+			overhead++ // the editor takes an extra row inside the list
+		case inputSearch, inputTag:
+			overhead++ // the editor is prompted below the list
+		}
+		// inputEdit replaces a row rather than adding one.
 	}
 	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
 		overhead += len(a.tagOptions) + 1
@@ -387,6 +398,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return next, cmd
 		}
+		// One teardown point for the inline editor, so no handler that leaves
+		// input mode can forget to clear it.
+		if updated.mode != modeInput {
+			updated.inputAnchorItem = -1
+			updated.list.SetHideCursor(false)
+		}
 		// A change seen while a modal was open applies as soon as it closes.
 		if updated.pendingReload && updated.mode == modeNormal {
 			updated.pendingReload = false
@@ -470,6 +487,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Enter is a second way in to adding a task. Matched on the key type
+	// rather than the name, so pasted text spelling "enter" cannot trigger it.
+	if msg.Type == tea.KeyEnter {
+		return a.startAdd()
+	}
+
 	// "g" is a prefix: a second "g" jumps to the top, anything else falls
 	// through and is handled on its own.
 	if a.pendingG {
@@ -521,11 +544,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyDone:
 		return a.toggleDone()
 	case ui.KeyAdd:
-		a.mode = modeInput
-		a.addAnchorLine = a.list.SelectedLineIndex()
-		a.input.StartAdd()
-		a.updateListSize()
-		return a, nil
+		return a.startAdd()
 	case ui.KeyEdit:
 		return a.startEdit()
 	case ui.KeyDelete:
@@ -698,12 +717,25 @@ func (a App) toggleDone() (tea.Model, tea.Cmd) {
 	return a, tea.Batch(cmd, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return flashMsg{} }))
 }
 
+// startAdd opens the inline editor on a fresh row below the selection.
+func (a App) startAdd() (tea.Model, tea.Cmd) {
+	a.mode = modeInput
+	a.addAnchorLine = a.list.SelectedLineIndex()
+	a.inputAnchorItem = a.list.Cursor()
+	a.list.SetHideCursor(true)
+	a.input.StartAdd()
+	a.updateListSize()
+	return a, nil
+}
+
 func (a App) startEdit() (tea.Model, tea.Cmd) {
 	idx := a.list.SelectedTaskIndex()
 	if idx < 0 {
 		return a, nil
 	}
 	a.mode = modeInput
+	a.inputAnchorItem = a.list.Cursor()
+	a.list.SetHideCursor(true)
 	a.input.StartEdit(idx, a.taskFile.Tasks[idx].Title)
 	a.updateListSize()
 	return a, nil
@@ -1110,26 +1142,21 @@ func (a App) View() string {
 		contentHeight = 3
 	}
 
-	contentLines := a.list.ViewLines(innerWidth, contentHeight)
-	lines = append(lines, contentLines...)
+	// Add and edit happen on the row itself; the others prompt below the list.
+	allLines, starts := a.list.buildLines()
+	allLines, editorLine := a.spliceInlineInput(allLines, starts)
+	lines = append(lines, a.list.clipAround(allLines, contentHeight, editorLine)...)
 
 	// Trailing blank
 	lines = append(lines, "")
 
-	// Input area (if active)
 	if a.mode == modeInput {
-		var prefix string
 		switch a.input.Mode() {
-		case inputAdd:
-			prefix = ui.InputLabel.Render("  Add: ")
-		case inputEdit:
-			prefix = ui.InputLabel.Render("  Edit: ")
 		case inputSearch:
-			prefix = ui.InputLabel.Render("  / ")
+			lines = append(lines, ui.InputLabel.Render("  / ")+a.input.View())
 		case inputTag:
-			prefix = ui.InputLabel.Render("  Tag: ")
+			lines = append(lines, ui.InputLabel.Render("  Tag: ")+a.input.View())
 		}
-		lines = append(lines, prefix+a.input.View())
 	}
 
 	// Tag selector (if active)
@@ -1164,6 +1191,60 @@ func (a App) View() string {
 	}
 
 	return view
+}
+
+// inlineInputActive reports whether the editor is drawn on a list row rather
+// than as a prompt under the list.
+func (a App) inlineInputActive() bool {
+	if a.mode != modeInput {
+		return false
+	}
+	m := a.input.Mode()
+	return m == inputAdd || m == inputEdit
+}
+
+// renderInlineInput draws the editor to look like the row it stands in for.
+func (a App) renderInlineInput() string {
+	status := task.StatusTodo
+	if a.input.Mode() == inputEdit {
+		if idx := a.input.EditIndex(); idx >= 0 && idx < len(a.taskFile.Tasks) {
+			status = a.taskFile.Tasks[idx].Status
+		}
+	}
+	return ui.CursorStyle.Render(" ▸ ") + statusIcon(status) + "  " + a.input.View()
+}
+
+// spliceInlineInput puts the editor into the rendered list: over the task
+// being edited, or on a new row just below the selection when adding.
+// It returns the line the editor occupies, or -1 when none was spliced.
+func (a App) spliceInlineInput(lines []string, starts []int) ([]string, int) {
+	anchor := a.inputAnchorItem
+	if !a.inlineInputActive() || anchor < 0 || anchor >= len(starts) {
+		return lines, -1
+	}
+
+	row := a.renderInlineInput()
+
+	if a.input.Mode() == inputEdit {
+		at := starts[anchor]
+		if at >= len(lines) {
+			return lines, -1
+		}
+		lines[at] = row
+		return lines, at
+	}
+
+	// Adding: insert after the anchor's block, which is where the next item
+	// starts. A heading's block includes its leading blank line, so this lands
+	// directly beneath the heading text.
+	at := len(lines)
+	if anchor+1 < len(starts) {
+		at = starts[anchor+1]
+	}
+	if at > len(lines) {
+		at = len(lines)
+	}
+	return append(lines[:at], append([]string{row}, lines[at:]...)...), at
 }
 
 // renderHelpBox renders the keybinding reference as a bordered box, for

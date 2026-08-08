@@ -29,6 +29,9 @@ func NewTaskInput() TaskInputModel {
 	ti := textinput.New()
 	ti.Placeholder = "Task title..."
 	ti.CharLimit = 256
+	// No "> " prompt: inline editors sit in a task row that already reads as
+	// one, and the search and tag prompts supply their own label.
+	ti.Prompt = ""
 	return TaskInputModel{input: ti}
 }
 

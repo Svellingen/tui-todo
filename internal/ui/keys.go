@@ -40,9 +40,11 @@ const (
 	KeyParentSection = "ctrl+h"
 	KeyChildSection  = "ctrl+l"
 
-	KeyQuit   = "q"
-	KeyHelp   = "?"
-	KeyDone   = "d"
+	KeyQuit = "q"
+	KeyHelp = "?"
+	KeyDone = "d"
+	// Enter also starts an add; it is matched by key type in the handler
+	// rather than by name, so it has no constant here.
 	KeyAdd    = "a"
 	KeyEdit   = "e"
 	KeyDelete = "x"

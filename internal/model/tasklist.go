@@ -45,6 +45,8 @@ type TaskListModel struct {
 	statusFilter statusFilter
 	searchQuery  string
 	tagFilter    string
+	// hideCursor suppresses the row marker while an inline editor is open.
+	hideCursor bool
 }
 
 func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
@@ -704,10 +706,10 @@ func (m TaskListModel) buildLines() (lines []string, starts []int) {
 				lines = append(lines, "")
 			}
 			isFirstSection = false
-			lines = append(lines, renderHeading(it.section, i == m.cursor))
+			lines = append(lines, renderHeading(it.section, i == m.cursor && !m.hideCursor))
 
 		case itemTask:
-			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor))
+			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor && !m.hideCursor))
 
 		case itemBlank:
 			// skip — we manage spacing ourselves
@@ -725,29 +727,46 @@ func (m TaskListModel) buildAllLines() []string {
 
 // ViewLines returns rendered lines, clipped to maxLines with scrolling.
 func (m TaskListModel) ViewLines(innerWidth, maxLines int) []string {
-	allLines := m.buildAllLines()
+	return m.clip(m.buildAllLines(), maxLines)
+}
 
+// clip trims rendered lines to the viewport, honouring the scroll offset. It
+// is separate from ViewLines so callers can splice an inline editor into the
+// lines first.
+func (m TaskListModel) clip(allLines []string, maxLines int) []string {
+	return clipLines(allLines, maxLines, m.scrollOffset)
+}
+
+// clipAround clips to the viewport but shifts the offset when needed to keep
+// line keep on screen -- used so an inline editor spliced in near the bottom
+// does not fall off it. A negative keep imposes no constraint.
+func (m TaskListModel) clipAround(allLines []string, maxLines, keep int) []string {
+	offset := m.scrollOffset
+	if keep >= 0 && maxLines > 0 {
+		if keep < offset {
+			offset = keep
+		}
+		if keep >= offset+maxLines {
+			offset = keep - maxLines + 1
+		}
+	}
+	return clipLines(allLines, maxLines, offset)
+}
+
+func clipLines(allLines []string, maxLines, start int) []string {
 	if maxLines <= 0 || len(allLines) <= maxLines {
 		return allLines
 	}
 
-	start := m.scrollOffset
-	end := start + maxLines
+	// Clamp the start before deriving the end, so an out-of-range offset
+	// cannot produce a window of the wrong size.
+	if start > len(allLines)-maxLines {
+		start = len(allLines) - maxLines
+	}
 	if start < 0 {
 		start = 0
 	}
-	if end > len(allLines) {
-		end = len(allLines)
-	}
-	if start >= len(allLines) {
-		start = 0
-		end = maxLines
-		if end > len(allLines) {
-			end = len(allLines)
-		}
-	}
-
-	return allLines[start:end]
+	return allLines[start : start+maxLines]
 }
 
 // View renders the task list as a single string.
@@ -769,15 +788,7 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	}
 
 	// Status icon
-	var icon string
-	switch t.Status {
-	case task.StatusTodo:
-		icon = ui.StatusTodo.Render("○")
-	case task.StatusInProgress:
-		icon = ui.StatusActive.Render("◐")
-	case task.StatusDone:
-		icon = ui.StatusDone.Render("●")
-	}
+	icon := statusIcon(t.Status)
 
 	// Title
 	title := t.Title
@@ -864,3 +875,19 @@ func (m TaskListModel) SelectedTaskIndex() int {
 	}
 	return it.taskIndex
 }
+
+// statusIcon renders the bullet for a task status.
+func statusIcon(s task.Status) string {
+	switch s {
+	case task.StatusInProgress:
+		return ui.StatusActive.Render("◐")
+	case task.StatusDone:
+		return ui.StatusDone.Render("●")
+	default:
+		return ui.StatusTodo.Render("○")
+	}
+}
+
+// SetHideCursor suppresses the row cursor, used while an inline editor holds
+// focus so there is only one caret on screen.
+func (m *TaskListModel) SetHideCursor(hide bool) { m.hideCursor = hide }

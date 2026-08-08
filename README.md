@@ -65,8 +65,8 @@ todo
 
 | Key | Action |
 |-----|--------|
-| `a` | Add a task next to the selection — below the current task, or under the current heading |
-| `e` | Edit task title |
+| `a` / `Enter` | Add a task inline on the next row — below the current task, or under the current heading |
+| `e` | Edit the task title inline, on its own row |
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
 | `Space` | Cycle status (todo / in-progress / done) |
@@ -185,6 +185,17 @@ With a heading selected:
 
 Actions that need a task — `d`, `Space`, `p`, `e`, `t`, `alt+j`/`alt+k` — do
 nothing while a heading is selected.
+
+## Editing in Place
+
+`a` and `e` open the editor inside the list rather than in a prompt at the
+bottom. `e` takes over the selected task's own row, keeping its status bullet;
+`a` opens a fresh row directly below the selection — under the current task, or
+under the heading when one is selected. `Enter` commits and `Esc` discards,
+leaving the task as it was.
+
+Search (`/`) and the tag prompt (`t`) still appear below the list, since
+neither belongs to a particular row.
 
 ## Sorting
 

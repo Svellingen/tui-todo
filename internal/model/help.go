@@ -30,7 +30,7 @@ func helpContent() string {
 			{"alt+J / alt+K", "Move task to next / prev heading"},
 		}},
 		{"Actions", []ui.HelpItem{
-			{"a", "Add task below the selection"},
+			{"a / Enter", "Add task below the selection"},
 			{"e", "Edit task title"},
 			{"d", "Toggle done"},
 			{"x", "Delete task, or heading + contents"},
