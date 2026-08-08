@@ -69,7 +69,8 @@ todo
 | `e` | Edit the task title inline, on its own row |
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
-| `Space` | Cycle status (todo / in-progress / done) |
+| `Space` | Cycle status forward (todo → in-progress → done, wrapping) |
+| `ctrl+space` | Step status back (done → in-progress → todo, stopping at todo) |
 | `p` / `P` | Raise / lower priority (none ↔ `!` ↔ `!!`, stopping at each end) |
 | `t` | Add tag to task |
 | `u` / `ctrl+r` | Undo / redo |

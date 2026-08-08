@@ -2,6 +2,8 @@ package model
 
 import (
 	"testing"
+
+	"github.com/macone/todo-cli/internal/task"
 )
 
 const undoFixture = "## Alpha\n" +
@@ -135,5 +137,65 @@ func TestRestoreClampsAnOutOfRangeCursor(t *testing.T) {
 	}
 	if got := a.list.cursorKind(); got != "task:only" {
 		t.Errorf("expected the cursor clamped onto the task, got %s", got)
+	}
+}
+
+// Space walks the status forward and wraps; ctrl+space walks it back and stops
+// at todo rather than jumping to done.
+func TestStatusScaleDirections(t *testing.T) {
+	forward := []struct{ from, want task.Status }{
+		{task.StatusTodo, task.StatusInProgress},
+		{task.StatusInProgress, task.StatusDone},
+		{task.StatusDone, task.StatusTodo}, // wraps
+	}
+	for _, c := range forward {
+		if got := nextStatus(c.from); got != c.want {
+			t.Errorf("nextStatus(%d): got %d, want %d", c.from, got, c.want)
+		}
+	}
+
+	back := []struct{ from, want task.Status }{
+		{task.StatusDone, task.StatusInProgress},
+		{task.StatusInProgress, task.StatusTodo},
+		{task.StatusTodo, task.StatusTodo}, // clamps
+	}
+	for _, c := range back {
+		if got := prevStatus(c.from); got != c.want {
+			t.Errorf("prevStatus(%d): got %d, want %d", c.from, got, c.want)
+		}
+	}
+}
+
+// Stepping back from todo changes nothing, so it must not reach the undo stack
+// or trigger a write.
+func TestCycleStatusBackAtTodoIsANoOp(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] only\n")
+	a = moveTo(t, a, "task:only")
+
+	next, _ := a.cycleStatusBack()
+	got := next.(App)
+
+	if got.taskFile.Tasks[0].Status != task.StatusTodo {
+		t.Errorf("expected the status unchanged, got %d", got.taskFile.Tasks[0].Status)
+	}
+	if len(got.undoStack) != 0 {
+		t.Errorf("expected no undo entry, got %d", len(got.undoStack))
+	}
+}
+
+func TestCycleStatusBackStepsDown(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [x] only\n")
+	a = moveTo(t, a, "task:only")
+
+	next, _ := a.cycleStatusBack()
+	a = next.(App)
+	if a.taskFile.Tasks[0].Status != task.StatusInProgress {
+		t.Fatalf("done should step to in-progress, got %d", a.taskFile.Tasks[0].Status)
+	}
+
+	next, _ = a.cycleStatusBack()
+	a = next.(App)
+	if a.taskFile.Tasks[0].Status != task.StatusTodo {
+		t.Errorf("in-progress should step to todo, got %d", a.taskFile.Tasks[0].Status)
 	}
 }

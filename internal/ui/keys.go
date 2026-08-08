@@ -49,12 +49,16 @@ const (
 	KeyEdit   = "e"
 	KeyDelete = "x"
 	// KeyStatus is the space bar; bubbletea reports it as a single space.
-	KeyStatus   = " "
-	KeyPrio     = "p"
-	KeyPrioDown = "P"
-	KeyUndo     = "u"
-	KeyRedo     = "ctrl+r"
-	KeyOpen     = "o"
+	KeyStatus = " "
+	// KeyStatusPrev is ctrl+space, which is NUL on the wire -- bubbletea names
+	// it "ctrl+@". Shift+space cannot be used: terminals send it as a plain
+	// space, indistinguishable from KeyStatus.
+	KeyStatusPrev = "ctrl+@"
+	KeyPrio       = "p"
+	KeyPrioDown   = "P"
+	KeyUndo       = "u"
+	KeyRedo       = "ctrl+r"
+	KeyOpen       = "o"
 
 	// Toggle the task file's path in the title bar.
 	KeyToggleFilename = "i"

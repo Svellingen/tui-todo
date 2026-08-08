@@ -583,6 +583,8 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.doDelete()
 	case ui.KeyStatus:
 		return a.cycleStatus()
+	case ui.KeyStatusPrev:
+		return a.cycleStatusBack()
 	case ui.KeyPrio:
 		return a.cyclePriority(1)
 	case ui.KeyPrioDown:
@@ -1030,20 +1032,64 @@ func (a App) openTagFilter() (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// statusScale runs from least to most complete. Space walks it forward and
+// wraps round; ctrl+space walks it back and stops at todo.
+var statusScale = []task.Status{
+	task.StatusTodo,
+	task.StatusInProgress,
+	task.StatusDone,
+}
+
+// nextStatus returns the status after s, wrapping past the end.
+func nextStatus(s task.Status) task.Status {
+	for i, v := range statusScale {
+		if v == s {
+			return statusScale[(i+1)%len(statusScale)]
+		}
+	}
+	return task.StatusTodo
+}
+
+// prevStatus returns the status before s, clamped -- todo has nothing behind
+// it, so it stays put rather than jumping to done.
+func prevStatus(s task.Status) task.Status {
+	for i, v := range statusScale {
+		if v == s {
+			if i == 0 {
+				return s
+			}
+			return statusScale[i-1]
+		}
+	}
+	return task.StatusTodo
+}
+
 func (a App) cycleStatus() (tea.Model, tea.Cmd) {
 	t := a.list.SelectedTaskItem()
 	if t == nil {
 		return a, nil
 	}
 	a.pushUndo("cycle status")
-	switch t.Status {
-	case task.StatusTodo:
-		t.Status = task.StatusInProgress
-	case task.StatusInProgress:
-		t.Status = task.StatusDone
-	case task.StatusDone:
-		t.Status = task.StatusTodo
+	t.Status = nextStatus(t.Status)
+	return a, a.save()
+}
+
+// cycleStatusBack walks a task back towards todo: done to in-progress,
+// in-progress to todo, and nothing at all on a task already at todo.
+func (a App) cycleStatusBack() (tea.Model, tea.Cmd) {
+	t := a.list.SelectedTaskItem()
+	if t == nil {
+		return a, nil
 	}
+
+	prev := prevStatus(t.Status)
+	if prev == t.Status {
+		// Already at todo: no undo entry, no write.
+		return a, nil
+	}
+
+	a.pushUndo("cycle status")
+	t.Status = prev
 	return a, a.save()
 }
 
