@@ -789,8 +789,6 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 	switch a.input.Mode() {
 	case inputAdd:
 		idx := a.addTask(value)
-		msg, cmd := flash("Added: " + value)
-		a.statusMsg = msg
 		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
@@ -798,8 +796,9 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		saveCmd := a.save()
 		// Land on the task just created. This also rebuilds the item list,
 		// which a save alone only does when the sort order actually moved.
+		// No flash: the new row appearing under the cursor is feedback enough.
 		a.list.SelectTask(idx)
-		return a, tea.Batch(saveCmd, cmd)
+		return a, saveCmd
 
 	case inputEdit:
 		idx := a.input.EditIndex()
