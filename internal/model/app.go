@@ -450,9 +450,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.list.MoveDown()
 	case ui.KeyUp, ui.KeyArrowUp:
 		a.list.MoveUp()
-	case ui.KeySectionDown:
+	case ui.KeySectionDown, ui.KeySectionNext:
 		a.list.JumpNextSection()
-	case ui.KeySectionUp:
+	case ui.KeySectionUp, ui.KeySectionPrev:
 		a.list.JumpPrevSection()
 	case ui.KeyMoveDown:
 		return a.moveTask(1)

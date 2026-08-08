@@ -20,10 +20,9 @@ func helpContent() string {
 		items []ui.HelpItem
 	}{
 		{"Navigation", []ui.HelpItem{
-			{"j / k", "Move down / up"},
-			{"↓ / ↑", "Move down / up"},
-			{"J / K", "Jump next / prev section"},
-			{"alt+j / k", "Move task down / up in its group"},
+			{"j / k, ↓ / ↑", "Move down / up"},
+			{"tab / S-tab", "Jump next / prev section (or J / K)"},
+			{"alt+j / alt+k", "Move task down / up in its group"},
 		}},
 		{"Actions", []ui.HelpItem{
 			{"a", "Add new task"},
@@ -54,7 +53,7 @@ func helpContent() string {
 	for i, g := range groups {
 		sb.WriteString(ui.SectionHeader.Render(g.name) + "\n")
 		for _, item := range g.items {
-			key := ui.HelpKey.Render(padRight(item.Key, 10))
+			key := ui.HelpKey.Render(padRight(item.Key, 14))
 			desc := ui.HelpBar.Render(item.Desc)
 			sb.WriteString("  " + key + " " + desc + "\n")
 		}

@@ -12,6 +12,10 @@ const (
 	KeySectionUp   = "K"
 	KeySectionDown = "J"
 
+	// Same jump, on the keys most people reach for.
+	KeySectionNext = "tab"
+	KeySectionPrev = "shift+tab"
+
 	// Reorder the selected task within its sort group.
 	KeyMoveUp   = "alt+k"
 	KeyMoveDown = "alt+j"
