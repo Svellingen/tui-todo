@@ -56,6 +56,7 @@ todo
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
 | `alt+j` / `alt+k` | Move the selected task down / up within its sort group |
+| `alt+shift+j` / `alt+shift+k` | Move the selected task to the next / previous heading |
 
 ### Actions
 

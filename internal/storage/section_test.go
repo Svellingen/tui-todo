@@ -281,6 +281,124 @@ func TestInsertTaskAfterRejectsOutOfRange(t *testing.T) {
 	}
 }
 
+// taskLine finds the Lines index of the task with the given title.
+func taskLine(t *testing.T, tf *TaskFile, title string) (line, index int) {
+	t.Helper()
+	for i, l := range tf.Lines {
+		if l.Type == LineTask && tf.Tasks[l.TaskIndex].Title == title {
+			return i, l.TaskIndex
+		}
+	}
+	t.Fatalf("task %q not found", title)
+	return -1, -1
+}
+
+func TestMoveTaskToNextSection(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	_, idx := taskLine(t, tf, "alpha one")
+
+	name, ok := tf.MoveTaskToSection(idx, 1)
+	if !ok {
+		t.Fatal("expected the move to succeed")
+	}
+	if name != "Alpha sub" {
+		t.Errorf("expected to land in Alpha sub, got %q", name)
+	}
+
+	want := "### Alpha sub\n- [ ] alpha one\n- [ ] alpha sub task\n"
+	if got := NewWriter().Write(tf); !strings.Contains(got, want) {
+		t.Errorf("expected output to contain:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+func TestMoveTaskToPrevSection(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	_, idx := taskLine(t, tf, "beta task")
+
+	name, ok := tf.MoveTaskToSection(idx, -1)
+	if !ok {
+		t.Fatal("expected the move to succeed")
+	}
+	if name != "Alpha deep" {
+		t.Errorf("expected to land in Alpha deep, got %q", name)
+	}
+}
+
+// There is nowhere to go past either end of the file.
+func TestMoveTaskToSectionStopsAtEnds(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+
+	_, last := taskLine(t, tf, "beta task")
+	if _, ok := tf.MoveTaskToSection(last, 1); ok {
+		t.Error("expected no section after the last one")
+	}
+
+	_, first := taskLine(t, tf, "top task")
+	if _, ok := tf.MoveTaskToSection(first, -1); ok {
+		t.Error("expected no section before the first one")
+	}
+
+	before := NewWriter().Write(tf)
+	tf.MoveTaskToSection(last, 1)
+	tf.MoveTaskToSection(first, -1)
+	if after := NewWriter().Write(tf); after != before {
+		t.Errorf("refused moves must not change the file:\n%s", after)
+	}
+}
+
+// Moving a task only relocates its line; the other tasks keep their indices.
+func TestMoveTaskToSectionKeepsOtherTasksIntact(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	wantTasks := len(tf.Tasks)
+	_, idx := taskLine(t, tf, "alpha one")
+
+	tf.MoveTaskToSection(idx, 1)
+
+	if len(tf.Tasks) != wantTasks {
+		t.Errorf("expected %d tasks, got %d", wantTasks, len(tf.Tasks))
+	}
+	if tf.Tasks[idx].Title != "alpha one" {
+		t.Errorf("expected index %d to still be 'alpha one', got %q", idx, tf.Tasks[idx].Title)
+	}
+	seen := map[string]bool{}
+	for _, l := range tf.Lines {
+		if l.Type == LineTask {
+			if l.TaskIndex < 0 || l.TaskIndex >= len(tf.Tasks) {
+				t.Fatalf("dangling task index %d", l.TaskIndex)
+			}
+			seen[tf.Tasks[l.TaskIndex].Title] = true
+		}
+	}
+	if len(seen) != wantTasks {
+		t.Errorf("expected every task to still have a line, got %v", seen)
+	}
+}
+
+func TestMoveTaskToSectionRejectsBadInput(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if _, ok := tf.MoveTaskToSection(0, 0); ok {
+		t.Error("expected a zero direction to be rejected")
+	}
+	if _, ok := tf.MoveTaskToSection(999, 1); ok {
+		t.Error("expected an unknown task index to be rejected")
+	}
+}
+
 func TestInsertTaskUnderRejectsNonHeadings(t *testing.T) {
 	tf, err := NewParser().Parse(nested)
 	if err != nil {

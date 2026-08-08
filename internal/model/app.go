@@ -490,6 +490,10 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.moveTask(1)
 	case ui.KeyMoveUp:
 		return a.moveTask(-1)
+	case ui.KeyMoveToNextSection:
+		return a.moveTaskToSection(1)
+	case ui.KeyMoveToPrevSection:
+		return a.moveTaskToSection(-1)
 	case ui.KeyBottom:
 		a.list.MoveToBottom()
 	case ui.KeyPageDown:
@@ -568,6 +572,31 @@ func headerPath(path string, width int) string {
 		keep = len(runes)
 	}
 	return "…" + string(runes[len(runes)-keep:])
+}
+
+// moveTaskToSection moves the selected task into the adjacent heading.
+func (a App) moveTaskToSection(dir int) (tea.Model, tea.Cmd) {
+	idx := a.list.SelectedTaskIndex()
+	if idx < 0 {
+		return a, nil
+	}
+
+	// Snapshot first: a move with nowhere to go should not reach the undo
+	// stack.
+	before := storage.NewWriter().Write(a.taskFile)
+	name, ok := a.taskFile.MoveTaskToSection(idx, dir)
+	if !ok {
+		return a, nil
+	}
+	a.pushUndoContent(before, "move to section")
+
+	saveCmd := a.save()
+	// Follow the task into its new home; this also rebuilds the item list.
+	a.list.SelectTask(idx)
+
+	msg, cmd := flash("Moved to: " + name)
+	a.statusMsg = msg
+	return a, tea.Batch(saveCmd, cmd)
 }
 
 // editorFinishedMsg reports that the editor subprocess exited.

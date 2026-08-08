@@ -26,6 +26,10 @@ const (
 	KeyMoveUp   = "alt+k"
 	KeyMoveDown = "alt+j"
 
+	// Move the selected task into the next / previous heading.
+	KeyMoveToNextSection = "alt+J"
+	KeyMoveToPrevSection = "alt+K"
+
 	KeyQuit   = "q"
 	KeyHelp   = "?"
 	KeyDone   = "d"

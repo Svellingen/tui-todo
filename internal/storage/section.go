@@ -125,6 +125,80 @@ func (tf *TaskFile) InsertTaskAfter(lineIdx int, t task.Task) int {
 	return tf.insertTaskAt(lineIdx+1, t)
 }
 
+// MoveTaskToSection moves a task into the heading adjacent to its own: the
+// next one in the file when dir is +1, the previous when -1. The task is
+// placed directly under that heading, and the sort then settles it within its
+// rank group there.
+//
+// It returns the target heading's name and whether anything moved -- there is
+// nowhere to go from the first or last section.
+func (tf *TaskFile) MoveTaskToSection(taskIndex, dir int) (string, bool) {
+	if dir != 1 && dir != -1 {
+		return "", false
+	}
+
+	from := -1
+	for i, l := range tf.Lines {
+		if l.Type == LineTask && l.TaskIndex == taskIndex {
+			from = i
+			break
+		}
+	}
+	if from < 0 {
+		return "", false
+	}
+
+	// The heading the task currently sits under, if any.
+	owner := -1
+	for i := from - 1; i >= 0; i-- {
+		if tf.Lines[i].Type == LineSection {
+			owner = i
+			break
+		}
+	}
+
+	target := -1
+	if dir > 0 {
+		for i := from + 1; i < len(tf.Lines); i++ {
+			if tf.Lines[i].Type == LineSection {
+				target = i
+				break
+			}
+		}
+	} else {
+		if owner < 0 {
+			return "", false
+		}
+		for i := owner - 1; i >= 0; i-- {
+			if tf.Lines[i].Type == LineSection {
+				target = i
+				break
+			}
+		}
+	}
+	if target < 0 {
+		return "", false
+	}
+
+	_, name := ParseHeading(strings.TrimSpace(tf.Lines[target].Raw))
+
+	line := tf.Lines[from]
+	tf.Lines = append(tf.Lines[:from], tf.Lines[from+1:]...)
+	if target > from {
+		target-- // the removal shifted everything after it down
+	}
+
+	at := target + 1
+	for at < len(tf.Lines) &&
+		tf.Lines[at].Type == LineText &&
+		strings.TrimSpace(tf.Lines[at].Raw) == "" {
+		at++
+	}
+	tf.Lines = append(tf.Lines[:at], append([]Line{line}, tf.Lines[at:]...)...)
+
+	return name, true
+}
+
 // insertTaskAt appends the task and splices a line for it at position at.
 func (tf *TaskFile) insertTaskAt(at int, t task.Task) int {
 	tf.Tasks = append(tf.Tasks, t)

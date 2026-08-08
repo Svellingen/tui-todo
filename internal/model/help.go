@@ -25,6 +25,7 @@ func helpContent() string {
 			{"gg / G", "Jump to top / bottom"},
 			{"ctrl+d/ctrl+u", "Page down / up"},
 			{"alt+j / alt+k", "Move task down / up in its group"},
+			{"alt+J / alt+K", "Move task to next / prev heading"},
 		}},
 		{"Actions", []ui.HelpItem{
 			{"a", "Add task below the selection"},
