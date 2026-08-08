@@ -1062,11 +1062,6 @@ func (a App) View() string {
 		return "Loading..."
 	}
 
-	// Help overlay takes over the full screen
-	if a.mode == modeHelp {
-		return a.renderHelpOverlay()
-	}
-
 	w := a.width
 	if w < 40 {
 		w = 80
@@ -1160,27 +1155,24 @@ func (a App) View() string {
 	}
 	lines = append(lines, status)
 
-	return strings.Join(lines, "\n")
+	view := strings.Join(lines, "\n")
+
+	// The help sits on top of the list rather than replacing it, so you keep
+	// your bearings while reading it.
+	if a.mode == modeHelp {
+		view = centerOverlay(view, a.renderHelpBox(), w, h)
+	}
+
+	return view
 }
 
-func (a App) renderHelpOverlay() string {
-	w := a.width
-	h := a.height
-	if w < 40 {
-		w = 80
-	}
-	if h < 10 {
-		h = 24
-	}
-
-	content := helpContent()
-
+// renderHelpBox renders the keybinding reference as a bordered box, for
+// compositing over the list.
+func (a App) renderHelpBox() string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ui.ColorBorder).
 		Padding(1, 3)
 
-	box := style.Render(content)
-
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, box)
+	return style.Render(helpContent())
 }
