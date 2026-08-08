@@ -62,7 +62,7 @@ todo
 | `d` | Toggle done |
 | `x` | Delete task (with confirmation) |
 | `Space` | Cycle status (todo / in-progress / done) |
-| `p` | Cycle priority (none / low / medium / high) |
+| `p` | Cycle priority (none / `!` / `!!`) |
 | `t` | Add tag to task |
 | `u` | Undo last action |
 | `o` | Open the task file in an editor |
@@ -147,12 +147,12 @@ Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 
 ## Backlog
 
-- [ ] Set up CI pipeline priority:high +devops
-- [ ] Write README priority:low +docs
+- [ ] !!! Set up CI pipeline +devops
+- [ ] ! Write README +docs
 
 ## In Progress
 
-- [-] Design TUI layout priority:high +design
+- [-] !!! Design TUI layout +design
 
 ## Done
 
@@ -162,14 +162,33 @@ Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 ### Task Syntax
 
 ```
-- [ ] Title priority:high +tag @context due:2026-03-01
+- [ ] !!! Title +tag @context due:2026-03-01
 ```
 
 - `- [ ]` todo, `- [-]` in-progress, `- [x]` done
-- `priority:high|medium|low` sets priority
+- `!` medium, `!!` high priority — a prefix before the title
 - `+tag` adds a tag
 - `@context` adds a context tag
 - `due:YYYY-MM-DD` sets a due date
+
+### Priority
+
+Priority is a run of `!` immediately after the checkbox:
+
+```markdown
+- [ ] no pri
+- [ ] ! medium priority task
+- [ ] !! high priority task
+```
+
+No marker is the bottom of the scale; there is no separate "low". The marker
+must be its own word, so a title like `- [ ] ship it!` is plain text, and more
+than two marks count as high.
+
+The older `priority:high|medium|low` token is still read, so existing files
+keep their priorities, but it is never written back — saving a file rewrites it
+using the `!` marker. Legacy `priority:low` becomes `!`, the weakest level the
+scale still has.
 
 ## Configuration
 

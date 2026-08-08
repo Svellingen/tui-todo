@@ -35,6 +35,19 @@ func (w *Writer) Write(tf *TaskFile) string {
 	return sb.String()
 }
 
+// PriorityMarker returns the "!" run denoting a priority, or "" for none.
+// This is the canonical on-disk form and is also what the CLI prints.
+func PriorityMarker(p task.Priority) string {
+	switch p {
+	case task.PriorityMedium:
+		return "!"
+	case task.PriorityHigh:
+		return "!!"
+	default:
+		return ""
+	}
+}
+
 // formatTask renders a task as a markdown checkbox line.
 func formatTask(t task.Task) string {
 	var sb strings.Builder
@@ -49,18 +62,14 @@ func formatTask(t task.Task) string {
 		sb.WriteString("- [x] ")
 	}
 
+	// Priority marker, prefixed to the title
+	sb.WriteString(PriorityMarker(t.Priority))
+	if t.Priority != task.PriorityNone {
+		sb.WriteByte(' ')
+	}
+
 	// Title
 	sb.WriteString(t.Title)
-
-	// Priority
-	switch t.Priority {
-	case task.PriorityHigh:
-		sb.WriteString(" priority:high")
-	case task.PriorityMedium:
-		sb.WriteString(" priority:medium")
-	case task.PriorityLow:
-		sb.WriteString(" priority:low")
-	}
 
 	// Tags
 	for _, tag := range t.Tags {

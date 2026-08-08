@@ -4,9 +4,10 @@ import "time"
 
 type Priority int
 
+// Priority levels. There is no separate "low": the scale is none, "!" and
+// "!!", so none serves as the bottom of it.
 const (
 	PriorityNone Priority = iota
-	PriorityLow
 	PriorityMedium
 	PriorityHigh
 )

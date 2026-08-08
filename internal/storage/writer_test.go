@@ -71,19 +71,51 @@ func TestWriteMetadata(t *testing.T) {
 		Lines: []Line{
 			{Raw: "## Backlog", Type: LineSection, Number: 1, TaskIndex: -1},
 			{Raw: "", Type: LineText, Number: 2, TaskIndex: -1},
-			{Raw: "- [ ] Fix bug priority:high +backend +security due:2026-03-01", Type: LineTask, Number: 3, TaskIndex: 0},
+			{Raw: "- [ ] !! Fix bug +backend +security due:2026-03-01", Type: LineTask, Number: 3, TaskIndex: 0},
 		},
 	}
 
 	result := w.Write(tf)
-	expected := "## Backlog\n\n- [ ] Fix bug priority:high +backend +security due:2026-03-01\n"
+	expected := "## Backlog\n\n- [ ] !! Fix bug +backend +security due:2026-03-01\n"
 	if result != expected {
 		t.Errorf("expected:\n%s\ngot:\n%s", expected, result)
 	}
 }
 
+func TestWritePriorityMarkers(t *testing.T) {
+	input := "## Backlog\n" +
+		"- [ ] no pri\n" +
+		"- [ ] ! medium priority task\n" +
+		"- [ ] !! high priority task\n"
+
+	p := NewParser()
+	tf, err := p.Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := NewWriter().Write(tf); got != input {
+		t.Errorf("expected:\n%s\ngot:\n%s", input, got)
+	}
+}
+
+// The legacy priority:X token is read but never written back; saving a file
+// migrates it to the "!" marker.
+func TestWriteMigratesLegacyPriority(t *testing.T) {
+	p := NewParser()
+	tf, err := p.Parse("## Backlog\n- [ ] Old style priority:medium +backend\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "## Backlog\n- [ ] ! Old style +backend\n"
+	if got := NewWriter().Write(tf); got != want {
+		t.Errorf("expected:\n%s\ngot:\n%s", want, got)
+	}
+}
+
 func TestWriteRoundtrip(t *testing.T) {
-	input := "# My Project\n\n## Backlog\n\n- [ ] Write tests\n- [ ] Fix bug priority:high +backend due:2026-03-01\n\n## In Progress\n\n- [-] Design TUI\n\n## Done\n\n- [x] Init project\n"
+	input := "# My Project\n\n## Backlog\n\n- [ ] Write tests\n- [ ] !! Fix bug +backend due:2026-03-01\n\n## In Progress\n\n- [-] Design TUI\n\n## Done\n\n- [x] Init project\n"
 
 	p := NewParser()
 	w := NewWriter()

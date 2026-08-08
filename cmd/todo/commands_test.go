@@ -119,12 +119,12 @@ func TestAddRequiresTitle(t *testing.T) {
 }
 
 func TestListTasks(t *testing.T) {
-	content := "## Backlog\n\n- [ ] Task one priority:high +backend\n- [ ] Task two\n\n## Done\n\n- [x] Task three\n"
+	content := "## Backlog\n\n- [ ] !! Task one +backend\n- [ ] Task two\n\n## Done\n\n- [x] Task three\n"
 	out, err := runCmd(t, content, "list")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(out, "1. [ ] Task one priority:high +backend") {
+	if !strings.Contains(out, "1. [ ] !! Task one +backend") {
 		t.Errorf("expected formatted task one, got:\n%s", out)
 	}
 	if !strings.Contains(out, "2. [ ] Task two") {

@@ -23,6 +23,10 @@ type item struct {
 	taskIndex int
 }
 
+// priorityColumnWidth is the width the "!" marker is padded to, so that titles
+// line up whether or not a task carries a priority.
+var priorityColumnWidth = len(storage.PriorityMarker(task.PriorityHigh))
+
 type statusFilter int
 
 const (
@@ -456,13 +460,16 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	// Title
 	title := t.Title
 
-	// Priority indicator
-	var prio string
+	// Priority indicator, prefixed to the title as it is in the file. It is
+	// padded to the width of the widest marker so titles stay in one column
+	// whether or not a task has a priority.
+	marker := padRight(storage.PriorityMarker(t.Priority), priorityColumnWidth)
+	prio := marker
 	switch t.Priority {
 	case task.PriorityHigh:
-		prio = ui.PriorityHigh.Render("!!")
+		prio = ui.PriorityHigh.Render(marker)
 	case task.PriorityMedium:
-		prio = ui.PriorityMedium.Render("!")
+		prio = ui.PriorityMedium.Render(marker)
 	}
 
 	// Tags
@@ -480,9 +487,6 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 
 	// Build metadata
 	var meta []string
-	if prio != "" {
-		meta = append(meta, prio)
-	}
 	if tagStr != "" {
 		meta = append(meta, tagStr)
 	}
@@ -494,15 +498,19 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	// Apply styling based on state
 	if t.Status == task.StatusDone {
 		title = ui.DoneTask.Render(title)
+		// Fade the marker along with the rest of a completed task.
+		if t.Priority != task.PriorityNone {
+			prio = ui.DoneMeta.Render(marker)
+		}
 		if metaStr != "" {
-			metaStr = ui.DoneMeta.Render(strings.Join(meta, " "))
+			metaStr = ui.DoneMeta.Render(metaStr)
 		}
 	} else if selected {
 		title = ui.SelectedTask.Render(title)
 	}
 
 	// Assemble
-	line := cursor + icon + "  " + title
+	line := cursor + icon + "  " + prio + " " + title
 	if metaStr != "" {
 		line += "  " + metaStr
 	}

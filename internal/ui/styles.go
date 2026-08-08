@@ -32,7 +32,6 @@ var (
 	SelectedTask   = lipgloss.NewStyle().Bold(true).Foreground(ColorWhite)
 	PriorityHigh   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
 	PriorityMedium = lipgloss.NewStyle().Foreground(ColorYellow)
-	PriorityLow    = lipgloss.NewStyle().Faint(true)
 	Tag            = lipgloss.NewStyle().Foreground(ColorMauve)
 	DueStyle       = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
 	DoneTask       = lipgloss.NewStyle().Foreground(ColorFaintGray).Strikethrough(true)

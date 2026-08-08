@@ -193,17 +193,14 @@ func newListCmd(out io.Writer) *cobra.Command {
 					status = "[x]"
 				}
 
-				line := fmt.Sprintf("%d. %s %s", i+1, status, t.Title)
+				// Priority prints as the same "!" marker used on disk.
+				title := t.Title
+				if marker := storage.PriorityMarker(t.Priority); marker != "" {
+					title = marker + " " + title
+				}
+				line := fmt.Sprintf("%d. %s %s", i+1, status, title)
 
 				var meta []string
-				switch t.Priority {
-				case task.PriorityHigh:
-					meta = append(meta, "priority:high")
-				case task.PriorityMedium:
-					meta = append(meta, "priority:medium")
-				case task.PriorityLow:
-					meta = append(meta, "priority:low")
-				}
 				for _, tag := range t.Tags {
 					meta = append(meta, "+"+tag)
 				}

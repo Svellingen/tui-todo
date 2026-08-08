@@ -68,7 +68,7 @@ func TestParseAllStatuses(t *testing.T) {
 }
 
 func TestParseMetadata(t *testing.T) {
-	input := "## Backlog\n\n- [ ] Fix bug priority:high +backend @security due:2026-03-01\n"
+	input := "## Backlog\n\n- [ ] !! Fix bug +backend @security due:2026-03-01\n"
 	p := NewParser()
 	result, err := p.Parse(input)
 	if err != nil {
@@ -86,6 +86,116 @@ func TestParseMetadata(t *testing.T) {
 	}
 	if tk.DueDate == nil {
 		t.Fatal("expected due date to be set")
+	}
+}
+
+func TestParsePriorityMarkers(t *testing.T) {
+	input := "## Backlog\n" +
+		"- [ ] no pri\n" +
+		"- [ ] ! medium priority task\n" +
+		"- [ ] !! high priority task\n"
+
+	p := NewParser()
+	result, err := p.Parse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []struct {
+		title    string
+		priority task.Priority
+	}{
+		{"no pri", task.PriorityNone},
+		{"medium priority task", task.PriorityMedium},
+		{"high priority task", task.PriorityHigh},
+	}
+
+	if len(result.Tasks) != len(want) {
+		t.Fatalf("expected %d tasks, got %d", len(want), len(result.Tasks))
+	}
+	for i, w := range want {
+		got := result.Tasks[i]
+		if got.Title != w.title {
+			t.Errorf("task %d: expected title %q, got %q", i, w.title, got.Title)
+		}
+		if got.Priority != w.priority {
+			t.Errorf("task %d: expected priority %d, got %d", i, w.priority, got.Priority)
+		}
+	}
+}
+
+// A "!" that is part of a word is text, not a priority marker.
+func TestParseExclamationInTitleIsNotPriority(t *testing.T) {
+	cases := []struct {
+		line  string
+		title string
+	}{
+		{"- [ ] ship it!", "ship it!"},
+		{"- [ ] !important-looking", "!important-looking"},
+		{"- [ ] wow!!! that broke", "wow!!! that broke"},
+	}
+
+	p := NewParser()
+	for _, c := range cases {
+		result, err := p.Parse("## Backlog\n" + c.line + "\n")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Tasks) != 1 {
+			t.Fatalf("%q: expected 1 task, got %d", c.line, len(result.Tasks))
+		}
+		got := result.Tasks[0]
+		if got.Title != c.title {
+			t.Errorf("%q: expected title %q, got %q", c.line, c.title, got.Title)
+		}
+		if got.Priority != task.PriorityNone {
+			t.Errorf("%q: expected no priority, got %d", c.line, got.Priority)
+		}
+	}
+}
+
+// More marks than the scale defines clamp to high rather than being dropped.
+func TestParseExcessMarksClampToHigh(t *testing.T) {
+	p := NewParser()
+	result, err := p.Parse("## Backlog\n- [ ] !!! very urgent\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := result.Tasks[0]
+	if got.Priority != task.PriorityHigh {
+		t.Errorf("expected PriorityHigh, got %d", got.Priority)
+	}
+	if got.Title != "very urgent" {
+		t.Errorf("expected title 'very urgent', got %q", got.Title)
+	}
+}
+
+// Files written by earlier versions still load with their priorities intact.
+// The scale has no separate low level any more, so legacy low lands on medium
+// rather than being dropped.
+func TestParseLegacyPriorityToken(t *testing.T) {
+	cases := []struct {
+		line string
+		want task.Priority
+	}{
+		{"- [ ] Old style priority:high +backend", task.PriorityHigh},
+		{"- [ ] Old style priority:medium +backend", task.PriorityMedium},
+		{"- [ ] Old style priority:low +backend", task.PriorityMedium},
+	}
+
+	p := NewParser()
+	for _, c := range cases {
+		result, err := p.Parse("## Backlog\n" + c.line + "\n")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got := result.Tasks[0]
+		if got.Priority != c.want {
+			t.Errorf("%q: expected priority %d, got %d", c.line, c.want, got.Priority)
+		}
+		if got.Title != "Old style" {
+			t.Errorf("%q: expected title 'Old style', got %q", c.line, got.Title)
+		}
 	}
 }
 

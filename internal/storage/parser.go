@@ -158,24 +158,61 @@ func parseTaskLine(trimmed string, sectionStatus task.Status, lineNum int, raw s
 	return t, true
 }
 
+// splitPriorityMarker pulls a leading "!" or "!!" off the text and returns the
+// remainder along with the priority it denotes. More than two marks are
+// treated as high.
+//
+// The marker must be its own token: only a run of "!" followed by whitespace
+// or end of text counts, so a title like "ship it!" is left alone.
+func splitPriorityMarker(text string) (string, task.Priority) {
+	rest := strings.TrimLeft(text, " \t")
+
+	marks := 0
+	for marks < len(rest) && rest[marks] == '!' {
+		marks++
+	}
+	if marks == 0 {
+		return text, task.PriorityNone
+	}
+	if marks < len(rest) && rest[marks] != ' ' && rest[marks] != '\t' {
+		return text, task.PriorityNone
+	}
+
+	var priority task.Priority
+	if marks == 1 {
+		priority = task.PriorityMedium
+	} else {
+		priority = task.PriorityHigh
+	}
+	return strings.TrimLeft(rest[marks:], " \t"), priority
+}
+
 // ParseMetadata extracts title, priority, tags, and due date from task text.
-// The title is everything before the first metadata token.
-// Metadata tokens: priority:X, +tag, @context, due:YYYY-MM-DD, created:YYYY-MM-DD, done:YYYY-MM-DD
+// Priority is a leading "!" marker; the title is everything after it that is
+// not a metadata token.
+// Metadata tokens: +tag, @context, due:YYYY-MM-DD, created:YYYY-MM-DD, done:YYYY-MM-DD
 func ParseMetadata(text string) (title string, priority task.Priority, tags []string, dueDate *time.Time) {
+	text, priority = splitPriorityMarker(text)
+
 	words := strings.Fields(text)
 	var titleWords []string
 
 	for _, word := range words {
 		switch {
 		case strings.HasPrefix(word, "priority:"):
-			val := strings.TrimPrefix(word, "priority:")
-			switch strings.ToLower(val) {
+			// Legacy form, still read so existing files keep their priorities.
+			// Anything written back out uses the "!" marker.
+			if priority != task.PriorityNone {
+				break
+			}
+			switch strings.ToLower(strings.TrimPrefix(word, "priority:")) {
 			case "high":
 				priority = task.PriorityHigh
-			case "medium", "med":
+			// The scale no longer has a separate low level, so the weakest
+			// legacy priority becomes the weakest current one rather than
+			// being dropped.
+			case "medium", "med", "low":
 				priority = task.PriorityMedium
-			case "low":
-				priority = task.PriorityLow
 			}
 		case strings.HasPrefix(word, "+"):
 			tag := strings.TrimPrefix(word, "+")

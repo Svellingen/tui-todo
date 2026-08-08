@@ -720,8 +720,6 @@ func (a App) cyclePriority() (tea.Model, tea.Cmd) {
 	a.pushUndo("cycle priority")
 	switch t.Priority {
 	case task.PriorityNone:
-		t.Priority = task.PriorityLow
-	case task.PriorityLow:
 		t.Priority = task.PriorityMedium
 	case task.PriorityMedium:
 		t.Priority = task.PriorityHigh
