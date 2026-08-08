@@ -53,6 +53,7 @@ const (
 	KeyPrio     = "p"
 	KeyPrioDown = "P"
 	KeyUndo     = "u"
+	KeyRedo     = "ctrl+r"
 	KeyOpen     = "o"
 
 	// Toggle the task file's path in the title bar.

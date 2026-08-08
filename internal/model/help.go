@@ -37,7 +37,7 @@ func helpContent() string {
 			{"Space", "Cycle status"},
 			{"p / P", "Raise / lower priority"},
 			{"t", "Add tag"},
-			{"u", "Undo"},
+			{"u / ctrl+r", "Undo / redo"},
 			{"o", "Open file in editor"},
 		}},
 		{"Filtering", []ui.HelpItem{

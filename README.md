@@ -72,7 +72,7 @@ todo
 | `Space` | Cycle status (todo / in-progress / done) |
 | `p` / `P` | Raise / lower priority (none ↔ `!` ↔ `!!`, stopping at each end) |
 | `t` | Add tag to task |
-| `u` | Undo last action |
+| `u` / `ctrl+r` | Undo / redo |
 | `o` | Open the task file in an editor |
 
 ### Filtering

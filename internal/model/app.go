@@ -54,9 +54,12 @@ const (
 	modeConfirmDeleteSection
 )
 
+// undoEntry is a snapshot of the file plus where the cursor was, so undoing
+// puts you back where you were working rather than at the top of the list.
 type undoEntry struct {
 	content string
 	desc    string
+	cursor  int
 }
 
 type flashMsg struct{}
@@ -72,6 +75,7 @@ type App struct {
 	err      error
 
 	undoStack  []undoEntry
+	redoStack  []undoEntry
 	statusMsg  string
 	tagOptions []string
 	tagCursor  int
@@ -210,11 +214,34 @@ func (a *App) pushUndo(desc string) {
 
 // pushUndoContent records an already-captured snapshot, for callers that must
 // decide whether a change happened before committing it to the undo stack.
+//
+// A fresh change invalidates anything that was undone, so the redo stack is
+// dropped -- the same rule editors use.
 func (a *App) pushUndoContent(content, desc string) {
-	a.undoStack = append(a.undoStack, undoEntry{content: content, desc: desc})
+	a.undoStack = append(a.undoStack, a.snapshot(content, desc))
 	if len(a.undoStack) > maxUndoStack {
 		a.undoStack = a.undoStack[1:]
 	}
+	a.redoStack = nil
+}
+
+// snapshot pairs content with the cursor position it belongs to.
+func (a App) snapshot(content, desc string) undoEntry {
+	return undoEntry{content: content, desc: desc, cursor: a.list.Cursor()}
+}
+
+// restore swaps in a snapshot's content and returns the cursor to where it was
+// when that snapshot was taken.
+func (a *App) restore(entry undoEntry) error {
+	tf, err := storage.NewParser().Parse(entry.content)
+	if err != nil {
+		return err
+	}
+	a.taskFile = tf
+	a.list = NewTaskListModel(a.taskFile)
+	a.updateListSize()
+	a.list.SelectItemNear(entry.cursor)
+	return nil
 }
 
 // save writes the in-memory state to disk.
@@ -237,6 +264,7 @@ func (a *App) save() tea.Cmd {
 		a.taskFile = disk
 		a.list.Reload(a.taskFile)
 		a.undoStack = nil
+		a.redoStack = nil
 		msg, cmd := flash("File changed on disk — reloaded, change not applied")
 		a.statusMsg = msg
 		return cmd
@@ -363,6 +391,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The snapshots describe a file that no longer exists on disk;
 		// replaying them would silently discard the outside edit.
 		a.undoStack = nil
+		a.redoStack = nil
 		a.updateListSize()
 		var cmd tea.Cmd
 		a.statusMsg, cmd = flash("Reloaded from disk")
@@ -560,6 +589,8 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.cyclePriority(-1)
 	case ui.KeyUndo:
 		return a.undo()
+	case ui.KeyRedo:
+		return a.redo()
 	case ui.KeyOpen:
 		return a.openInEditor()
 	case ui.KeyToggleFilename:
@@ -1067,19 +1098,43 @@ func (a App) undo() (tea.Model, tea.Cmd) {
 	entry := a.undoStack[len(a.undoStack)-1]
 	a.undoStack = a.undoStack[:len(a.undoStack)-1]
 
-	p := storage.NewParser()
-	tf, err := p.Parse(entry.content)
-	if err != nil {
+	// Remember the state being undone so it can be redone.
+	redo := a.snapshot(storage.NewWriter().Write(a.taskFile), entry.desc)
+
+	if err := a.restore(entry); err != nil {
 		a.err = err
 		return a, nil
 	}
-	a.taskFile = tf
-	a.list = NewTaskListModel(a.taskFile)
-	a.updateListSize()
+	a.redoStack = append(a.redoStack, redo)
 
-	var msg string
-	var cmd tea.Cmd
-	msg, cmd = flash("Undone: " + entry.desc)
+	msg, cmd := flash("Undone: " + entry.desc)
+	a.statusMsg = msg
+	return a, tea.Batch(a.save(), cmd)
+}
+
+func (a App) redo() (tea.Model, tea.Cmd) {
+	if len(a.redoStack) == 0 {
+		a.statusMsg = "Nothing to redo"
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return flashMsg{} })
+	}
+
+	entry := a.redoStack[len(a.redoStack)-1]
+	a.redoStack = a.redoStack[:len(a.redoStack)-1]
+
+	undo := a.snapshot(storage.NewWriter().Write(a.taskFile), entry.desc)
+
+	if err := a.restore(entry); err != nil {
+		a.err = err
+		return a, nil
+	}
+	// Straight back onto the undo stack, without clearing the redo history
+	// that pushUndoContent would drop.
+	a.undoStack = append(a.undoStack, undo)
+	if len(a.undoStack) > maxUndoStack {
+		a.undoStack = a.undoStack[1:]
+	}
+
+	msg, cmd := flash("Redone: " + entry.desc)
 	a.statusMsg = msg
 	return a, tea.Batch(a.save(), cmd)
 }

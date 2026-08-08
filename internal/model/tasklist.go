@@ -477,6 +477,36 @@ func (m *TaskListModel) SelectTask(taskIndex int) {
 	}
 }
 
+// SelectItemNear puts the cursor on pos, or on the nearest selectable item to
+// it when pos no longer lands on one. Unlike the other selectors it does not
+// rebuild, so callers restoring a snapshot keep the list they just built.
+func (m *TaskListModel) SelectItemNear(pos int) {
+	if len(m.items) == 0 {
+		return
+	}
+	if pos >= len(m.items) {
+		pos = len(m.items) - 1
+	}
+	if pos < 0 {
+		pos = 0
+	}
+
+	for i := pos; i < len(m.items); i++ {
+		if m.items[i].kind != itemBlank {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+	for i := pos; i >= 0; i-- {
+		if m.items[i].kind != itemBlank {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
 // SelectPrecedingItem rebuilds the list and puts the cursor on the nearest
 // selectable item at or before pos.
 //
