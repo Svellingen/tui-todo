@@ -23,6 +23,7 @@ func helpContent() string {
 			{"j / k", "Move down / up"},
 			{"↓ / ↑", "Move down / up"},
 			{"J / K", "Jump next / prev section"},
+			{"alt+j / k", "Move task down / up in its group"},
 		}},
 		{"Actions", []ui.HelpItem{
 			{"a", "Add new task"},

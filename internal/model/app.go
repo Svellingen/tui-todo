@@ -179,8 +179,12 @@ func (a App) checkReload() tea.Cmd {
 }
 
 func (a *App) pushUndo(desc string) {
-	w := storage.NewWriter()
-	content := w.Write(a.taskFile)
+	a.pushUndoContent(storage.NewWriter().Write(a.taskFile), desc)
+}
+
+// pushUndoContent records an already-captured snapshot, for callers that must
+// decide whether a change happened before committing it to the undo stack.
+func (a *App) pushUndoContent(content, desc string) {
 	a.undoStack = append(a.undoStack, undoEntry{content: content, desc: desc})
 	if len(a.undoStack) > maxUndoStack {
 		a.undoStack = a.undoStack[1:]
@@ -212,12 +216,46 @@ func (a *App) save() tea.Cmd {
 		return cmd
 	}
 
+	// Every write leaves the file in sorted order, so no mutation path can
+	// forget to re-sort after changing a task's status or priority.
+	if a.taskFile.Sort() {
+		a.list.RefreshOrder()
+	}
+
 	if err := a.store.Save(a.taskFile); err != nil {
 		a.err = err
 		return nil
 	}
 	a.stamp, _ = statFile(a.store.FilePath)
 	return nil
+}
+
+// normalizeOrder sorts freshly loaded content and writes it back when the
+// stored order differed, keeping the file canonical.
+func (a *App) normalizeOrder() tea.Cmd {
+	if !a.taskFile.Sort() {
+		return nil
+	}
+	a.list.RefreshOrder()
+	return a.save()
+}
+
+// moveTask shifts the selected task within its sort group.
+func (a App) moveTask(delta int) (tea.Model, tea.Cmd) {
+	idx := a.list.SelectedTaskIndex()
+	if idx < 0 {
+		return a, nil
+	}
+
+	// Snapshot before mutating: a blocked move should not land on the undo
+	// stack.
+	before := storage.NewWriter().Write(a.taskFile)
+	if !a.taskFile.MoveTask(idx, delta) {
+		return a, nil
+	}
+	a.pushUndoContent(before, "move task")
+	a.list.RefreshOrder()
+	return a, a.save()
 }
 
 func flash(msg string) (string, tea.Cmd) {
@@ -253,7 +291,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.list = NewTaskListModel(a.taskFile)
 		a.updateListSize()
 		// Start watching only once there is content to compare against.
-		return a, a.startWatch()
+		return a, tea.Batch(a.normalizeOrder(), a.startWatch())
 
 	case fileChangedMsg:
 		next := waitForChange(a.watcher)
@@ -286,7 +324,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.updateListSize()
 		var cmd tea.Cmd
 		a.statusMsg, cmd = flash("Reloaded from disk")
-		return a, cmd
+		return a, tea.Batch(cmd, a.normalizeOrder())
 
 	case editorFinishedMsg:
 		if msg.err != nil {
@@ -411,6 +449,10 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.list.JumpNextSection()
 	case ui.KeySectionUp:
 		a.list.JumpPrevSection()
+	case ui.KeyMoveDown:
+		return a.moveTask(1)
+	case ui.KeyMoveUp:
+		return a.moveTask(-1)
 	case ui.KeyDone:
 		return a.toggleDone()
 	case ui.KeyAdd:

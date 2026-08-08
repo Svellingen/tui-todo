@@ -153,6 +153,7 @@ func newAddCmd(out io.Writer) *cobra.Command {
 				tf.Lines = append(tf.Lines, newLine)
 			}
 
+			tf.Sort()
 			if err := store.Save(tf); err != nil {
 				return fmt.Errorf("failed to save %s: %w", path, err)
 			}
@@ -242,6 +243,7 @@ func newDoneCmd(out io.Writer) *cobra.Command {
 			idx := n - 1
 			tf.Tasks[idx].Status = task.StatusDone
 
+			tf.Sort()
 			if err := store.Save(tf); err != nil {
 				return fmt.Errorf("failed to save %s: %w", path, err)
 			}

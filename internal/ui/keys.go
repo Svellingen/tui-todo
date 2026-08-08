@@ -12,6 +12,10 @@ const (
 	KeySectionUp   = "K"
 	KeySectionDown = "J"
 
+	// Reorder the selected task within its sort group.
+	KeyMoveUp   = "alt+k"
+	KeyMoveDown = "alt+j"
+
 	KeyQuit   = "q"
 	KeyHelp   = "?"
 	KeyDone   = "d"

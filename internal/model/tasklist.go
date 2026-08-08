@@ -23,10 +23,6 @@ type item struct {
 	taskIndex int
 }
 
-// priorityColumnWidth is the width the "!" marker is padded to, so that titles
-// line up whether or not a task carries a priority.
-var priorityColumnWidth = len(storage.PriorityMarker(task.PriorityHigh))
-
 type statusFilter int
 
 const (
@@ -71,6 +67,23 @@ func (m *TaskListModel) rebuildItems() {
 	m.cursor = 0
 	m.moveToNextTask(0)
 	m.scrollOffset = 0
+}
+
+// RefreshOrder rebuilds the item list after the underlying task order changed,
+// leaving the cursor on the task it was already on.
+func (m *TaskListModel) RefreshOrder() {
+	selected := m.SelectedTaskIndex()
+	m.rebuildItems()
+	if selected < 0 {
+		return
+	}
+	for i, it := range m.items {
+		if it.kind == itemTask && it.taskIndex == selected {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
 }
 
 // Reload swaps in freshly parsed content, keeping the active filters and
@@ -460,10 +473,9 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	// Title
 	title := t.Title
 
-	// Priority indicator, prefixed to the title as it is in the file. It is
-	// padded to the width of the widest marker so titles stay in one column
-	// whether or not a task has a priority.
-	marker := padRight(storage.PriorityMarker(t.Priority), priorityColumnWidth)
+	// Priority indicator, prefixed to the title exactly as it appears in the
+	// file: no padding, so the list reads like the markdown it came from.
+	marker := storage.PriorityMarker(t.Priority)
 	prio := marker
 	switch t.Priority {
 	case task.PriorityHigh:
@@ -510,7 +522,11 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	}
 
 	// Assemble
-	line := cursor + icon + "  " + prio + " " + title
+	line := cursor + icon + "  "
+	if prio != "" {
+		line += prio + " "
+	}
+	line += title
 	if metaStr != "" {
 		line += "  " + metaStr
 	}

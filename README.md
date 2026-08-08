@@ -52,6 +52,7 @@ todo
 | `j` / `k` | Move down / up |
 | `↓` / `↑` | Move down / up |
 | `J` / `K` | Jump to next / previous section |
+| `alt+j` / `alt+k` | Move the selected task down / up within its sort group |
 
 ### Actions
 
@@ -106,6 +107,27 @@ the walk runs to the filesystem root.
 If nothing is found, commands that write (`add`) create `tasks.md` in the
 current directory. `todo init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
+
+## Sorting
+
+Tasks are kept sorted inside each section, top to bottom:
+
+1. done tasks
+2. high priority (`!!`)
+3. medium priority (`!`)
+4. everything else
+
+Sorting is per section — a task never crosses a `##` header. The order is
+written back to `tasks.md`, so what the TUI shows is what the file contains.
+Opening the app on a hand-ordered file rewrites it into sorted order, as does
+any edit made through the CLI.
+
+The sort is stable: tasks of equal rank keep their relative order. `alt+j` and
+`alt+k` move the selected task down and up within its own rank group, and that
+manual order survives later sorts. A move that would cross into another rank,
+or out of the section, does nothing — priority ordering can't be broken by
+hand. Changing a task's status or priority re-sorts it immediately, with the
+cursor following the task rather than staying at the same screen position.
 
 ## Editing in an Editor
 
