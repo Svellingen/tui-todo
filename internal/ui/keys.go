@@ -47,10 +47,11 @@ const (
 	KeyEdit   = "e"
 	KeyDelete = "x"
 	// KeyStatus is the space bar; bubbletea reports it as a single space.
-	KeyStatus = " "
-	KeyPrio   = "p"
-	KeyUndo   = "u"
-	KeyOpen   = "o"
+	KeyStatus   = " "
+	KeyPrio     = "p"
+	KeyPrioDown = "P"
+	KeyUndo     = "u"
+	KeyOpen     = "o"
 
 	// Toggle the task file's path in the title bar.
 	KeyToggleFilename = "i"

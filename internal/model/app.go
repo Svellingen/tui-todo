@@ -536,7 +536,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyStatus:
 		return a.cycleStatus()
 	case ui.KeyPrio:
-		return a.cyclePriority()
+		return a.cyclePriority(1)
+	case ui.KeyPrioDown:
+		return a.cyclePriority(-1)
 	case ui.KeyUndo:
 		return a.undo()
 	case ui.KeyOpen:
@@ -982,20 +984,45 @@ func (a App) cycleStatus() (tea.Model, tea.Cmd) {
 	return a, a.save()
 }
 
-func (a App) cyclePriority() (tea.Model, tea.Cmd) {
+// priorityScale runs from lowest to highest. "p" walks it up and "P" walks it
+// down; neither wraps, so both stop at their end.
+var priorityScale = []task.Priority{
+	task.PriorityNone,
+	task.PriorityMedium,
+	task.PriorityHigh,
+}
+
+// steppedPriority returns the priority dir places along the scale, clamped at
+// either end -- so it returns p unchanged when there is nowhere further to go.
+func steppedPriority(p task.Priority, dir int) task.Priority {
+	for i, v := range priorityScale {
+		if v == p {
+			next := i + dir
+			if next < 0 || next >= len(priorityScale) {
+				return p
+			}
+			return priorityScale[next]
+		}
+	}
+	return task.PriorityNone
+}
+
+// cyclePriority raises the selected task's priority when dir is +1 and lowers
+// it when dir is -1.
+func (a App) cyclePriority(dir int) (tea.Model, tea.Cmd) {
 	t := a.list.SelectedTaskItem()
 	if t == nil {
 		return a, nil
 	}
-	a.pushUndo("cycle priority")
-	switch t.Priority {
-	case task.PriorityNone:
-		t.Priority = task.PriorityMedium
-	case task.PriorityMedium:
-		t.Priority = task.PriorityHigh
-	case task.PriorityHigh:
-		t.Priority = task.PriorityNone
+
+	next := steppedPriority(t.Priority, dir)
+	if next == t.Priority {
+		// Already at the end of the scale: no undo entry, no write.
+		return a, nil
 	}
+
+	a.pushUndo("cycle priority")
+	t.Priority = next
 	return a, a.save()
 }
 

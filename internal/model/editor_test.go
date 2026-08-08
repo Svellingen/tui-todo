@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/macone/todo-cli/internal/storage"
+	"github.com/macone/todo-cli/internal/task"
 )
 
 func TestEditorInvocationAddsLineForKnownEditors(t *testing.T) {
@@ -80,5 +81,49 @@ func TestSelectedFileLineTracksCursor(t *testing.T) {
 	a.list.JumpPrevSection()
 	if got := a.selectedFileLine(); got != 4 {
 		t.Errorf("Alpha heading: expected line 4, got %d", got)
+	}
+}
+
+// "p" and "P" walk the scale in opposite directions and stop at its ends
+// rather than wrapping round.
+func TestSteppedPriorityClampsAtEnds(t *testing.T) {
+	if got := steppedPriority(task.PriorityHigh, 1); got != task.PriorityHigh {
+		t.Errorf("raising from the top should stay put, got %d", got)
+	}
+	if got := steppedPriority(task.PriorityNone, -1); got != task.PriorityNone {
+		t.Errorf("lowering from the bottom should stay put, got %d", got)
+	}
+}
+
+func TestSteppedPriorityStepsThroughScale(t *testing.T) {
+	cases := []struct {
+		from task.Priority
+		dir  int
+		want task.Priority
+	}{
+		{task.PriorityNone, 1, task.PriorityMedium},
+		{task.PriorityMedium, 1, task.PriorityHigh},
+		{task.PriorityHigh, -1, task.PriorityMedium},
+		{task.PriorityMedium, -1, task.PriorityNone},
+	}
+	for _, c := range cases {
+		if got := steppedPriority(c.from, c.dir); got != c.want {
+			t.Errorf("from %d dir %d: got %d, want %d", c.from, c.dir, got, c.want)
+		}
+	}
+}
+
+// Away from the ends, the two directions still undo each other.
+func TestSteppedPriorityIsReversibleAwayFromEnds(t *testing.T) {
+	if got := steppedPriority(steppedPriority(task.PriorityNone, 1), -1); got != task.PriorityNone {
+		t.Errorf("none: raise then lower gave %d", got)
+	}
+	if got := steppedPriority(steppedPriority(task.PriorityHigh, -1), 1); got != task.PriorityHigh {
+		t.Errorf("high: lower then raise gave %d", got)
+	}
+	for _, dir := range []int{1, -1} {
+		if got := steppedPriority(steppedPriority(task.PriorityMedium, dir), -dir); got != task.PriorityMedium {
+			t.Errorf("medium dir %d round-trip gave %d", dir, got)
+		}
 	}
 }

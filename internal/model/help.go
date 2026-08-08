@@ -35,7 +35,7 @@ func helpContent() string {
 			{"d", "Toggle done"},
 			{"x", "Delete task, or heading + contents"},
 			{"Space", "Cycle status"},
-			{"p", "Cycle priority"},
+			{"p / P", "Raise / lower priority"},
 			{"t", "Add tag"},
 			{"u", "Undo"},
 			{"o", "Open file in editor"},

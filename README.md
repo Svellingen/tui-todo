@@ -69,7 +69,7 @@ todo
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
 | `Space` | Cycle status (todo / in-progress / done) |
-| `p` | Cycle priority (none / `!` / `!!`) |
+| `p` / `P` | Raise / lower priority (none ↔ `!` ↔ `!!`, stopping at each end) |
 | `t` | Add tag to task |
 | `u` | Undo last action |
 | `o` | Open the task file in an editor |
