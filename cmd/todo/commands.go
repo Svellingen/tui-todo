@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -11,8 +12,6 @@ import (
 	"github.com/macone/todo-cli/internal/task"
 	"github.com/spf13/cobra"
 )
-
-const defaultFile = "todo.md"
 
 const initTemplate = `# Todo
 
@@ -22,6 +21,35 @@ const initTemplate = `# Todo
 
 ## Done
 `
+
+// resolveStore locates the task file for the current directory, walking up the
+// directory tree, and returns a Store for it plus a path suitable for messages.
+func resolveStore() (*storage.Store, string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, "", err
+	}
+	path, err := storage.ResolveOrDefault(cwd)
+	if err != nil {
+		return nil, "", err
+	}
+	return storage.NewStore(path), displayPath(path), nil
+}
+
+// displayPath renders an absolute path relative to the current directory when
+// that is shorter, so messages read "tasks.md" or "../tasks.md" rather than a
+// full absolute path.
+func displayPath(path string) string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(cwd, path)
+	if err != nil || len(rel) >= len(path) {
+		return path
+	}
+	return rel
+}
 
 // newRootCmd creates the root cobra command. The out parameter controls where
 // output is written (allows testing without capturing os.Stdout).
@@ -49,15 +77,17 @@ func newRootCmd(out io.Writer, launchTUI func() error) *cobra.Command {
 func newInitCmd(out io.Writer) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Create an empty todo.md in the current directory",
+		Short: "Create an empty tasks.md in the current directory",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, err := os.Stat(defaultFile); err == nil {
-				return fmt.Errorf("%s already exists", defaultFile)
+			// init always targets the current directory rather than resolving
+			// up the tree, so it can shadow an ancestor's task file.
+			if _, err := os.Stat(storage.DefaultName); err == nil {
+				return fmt.Errorf("%s already exists", storage.DefaultName)
 			}
-			if err := os.WriteFile(defaultFile, []byte(initTemplate), 0644); err != nil {
-				return fmt.Errorf("failed to create %s: %w", defaultFile, err)
+			if err := os.WriteFile(storage.DefaultName, []byte(initTemplate), 0644); err != nil {
+				return fmt.Errorf("failed to create %s: %w", storage.DefaultName, err)
 			}
-			fmt.Fprintf(out, "Created %s\n", defaultFile)
+			fmt.Fprintf(out, "Created %s\n", storage.DefaultName)
 			return nil
 		},
 	}
@@ -74,10 +104,13 @@ func newAddCmd(out io.Writer) *cobra.Command {
 				return fmt.Errorf("task title cannot be empty")
 			}
 
-			store := storage.NewStore(defaultFile)
+			store, path, err := resolveStore()
+			if err != nil {
+				return err
+			}
 			tf, err := store.Load()
 			if err != nil {
-				return fmt.Errorf("failed to load %s: %w", defaultFile, err)
+				return fmt.Errorf("failed to load %s: %w", path, err)
 			}
 
 			newTask := task.Task{
@@ -121,10 +154,10 @@ func newAddCmd(out io.Writer) *cobra.Command {
 			}
 
 			if err := store.Save(tf); err != nil {
-				return fmt.Errorf("failed to save %s: %w", defaultFile, err)
+				return fmt.Errorf("failed to save %s: %w", path, err)
 			}
 
-			fmt.Fprintf(out, "Added: %s\n", title)
+			fmt.Fprintf(out, "Added: %s (%s)\n", title, path)
 			return nil
 		},
 	}
@@ -135,10 +168,13 @@ func newListCmd(out io.Writer) *cobra.Command {
 		Use:   "list",
 		Short: "List all tasks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			store := storage.NewStore(defaultFile)
+			store, path, err := resolveStore()
+			if err != nil {
+				return err
+			}
 			tf, err := store.Load()
 			if err != nil {
-				return fmt.Errorf("failed to load %s: %w", defaultFile, err)
+				return fmt.Errorf("failed to load %s: %w", path, err)
 			}
 
 			if len(tf.Tasks) == 0 {
@@ -193,10 +229,13 @@ func newDoneCmd(out io.Writer) *cobra.Command {
 				return fmt.Errorf("invalid task number: %s", args[0])
 			}
 
-			store := storage.NewStore(defaultFile)
+			store, path, err := resolveStore()
+			if err != nil {
+				return err
+			}
 			tf, err := store.Load()
 			if err != nil {
-				return fmt.Errorf("failed to load %s: %w", defaultFile, err)
+				return fmt.Errorf("failed to load %s: %w", path, err)
 			}
 
 			if n < 1 || n > len(tf.Tasks) {
@@ -207,7 +246,7 @@ func newDoneCmd(out io.Writer) *cobra.Command {
 			tf.Tasks[idx].Status = task.StatusDone
 
 			if err := store.Save(tf); err != nil {
-				return fmt.Errorf("failed to save %s: %w", defaultFile, err)
+				return fmt.Errorf("failed to save %s: %w", path, err)
 			}
 
 			fmt.Fprintf(out, "Done: %s\n", tf.Tasks[idx].Title)

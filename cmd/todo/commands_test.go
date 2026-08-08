@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/macone/todo-cli/internal/storage"
 )
 
-// helper to run a command in a temp directory with an optional existing todo.md
+// helper to run a command in a temp directory with an optional existing tasks.md
 func runCmd(t *testing.T, existingContent string, args ...string) (string, error) {
 	t.Helper()
 
@@ -23,7 +25,7 @@ func runCmd(t *testing.T, existingContent string, args ...string) (string, error
 	t.Cleanup(func() { os.Chdir(origDir) })
 
 	if existingContent != "" {
-		if err := os.WriteFile(filepath.Join(dir, defaultFile), []byte(existingContent), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, storage.DefaultName), []byte(existingContent), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -35,10 +37,10 @@ func runCmd(t *testing.T, existingContent string, args ...string) (string, error
 	return buf.String(), execErr
 }
 
-// readFile reads todo.md from the current directory
+// readFile reads tasks.md from the current directory
 func readFile(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile(defaultFile)
+	data, err := os.ReadFile(storage.DefaultName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,6 +173,47 @@ func TestDoneInvalidNumber(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("expected 'does not exist' error, got: %v", err)
+	}
+}
+
+// Commands run from a subdirectory should act on the nearest ancestor's task
+// file rather than creating a new one in the current directory.
+func TestCommandsResolveAncestorFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "tasks.md"), []byte("## Backlog\n\n- [ ] Ancestor task\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "sub", "deeper")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	var buf bytes.Buffer
+	cmd := newRootCmd(&buf, func() error { return nil })
+	cmd.SetArgs([]string{"add", "From subdir"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(nested, "tasks.md")); err == nil {
+		t.Error("expected no tasks.md created in the subdirectory")
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, "tasks.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "- [ ] From subdir") {
+		t.Errorf("expected task written to ancestor file, got:\n%s", data)
 	}
 }
 

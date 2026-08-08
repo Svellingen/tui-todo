@@ -33,7 +33,7 @@ type Section struct {
 	Line   int // Line number of the section header
 }
 
-// TaskFile holds the parsed contents of a todo.md file.
+// TaskFile holds the parsed contents of a tasks.md file.
 type TaskFile struct {
 	Tasks    []task.Task
 	Lines    []Line

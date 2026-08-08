@@ -9,7 +9,7 @@ import (
 )
 
 func TestLoadMissingFile(t *testing.T) {
-	s := NewStore("/nonexistent/path/todo.md")
+	s := NewStore("/nonexistent/path/tasks.md")
 	tf, err := s.Load()
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
@@ -21,7 +21,7 @@ func TestLoadMissingFile(t *testing.T) {
 
 func TestLoadExistingFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "todo.md")
+	path := filepath.Join(dir, "tasks.md")
 
 	content := "## Backlog\n\n- [ ] Test task\n"
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -43,7 +43,7 @@ func TestLoadExistingFile(t *testing.T) {
 
 func TestSaveCreatesFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "todo.md")
+	path := filepath.Join(dir, "tasks.md")
 
 	s := NewStore(path)
 	tf := &TaskFile{
@@ -77,7 +77,7 @@ func TestSaveCreatesFile(t *testing.T) {
 
 func TestSaveAndLoadRoundtrip(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "todo.md")
+	path := filepath.Join(dir, "tasks.md")
 
 	s := NewStore(path)
 

@@ -22,7 +22,7 @@ just build
 ## Quick Start
 
 ```bash
-# Create a todo.md in your project
+# Create a tasks.md in your project
 todo init
 
 # Add tasks
@@ -38,7 +38,7 @@ todo
 | Command | Description |
 |---------|-------------|
 | `todo` | Launch the TUI (default) |
-| `todo init` | Create an empty `todo.md` |
+| `todo init` | Create an empty `tasks.md` |
 | `todo add "title"` | Add a task to the Backlog |
 | `todo list` | List all tasks |
 | `todo done <n>` | Mark task #n as done |
@@ -82,9 +82,32 @@ todo
 | `?` | Toggle help overlay |
 | `q` | Quit |
 
+## File Resolution
+
+Commands locate the task file by checking each directory from the current one
+upwards, stopping at the first match:
+
+1. `tasks.md` in the current directory
+2. `index.md` in the current directory
+3. the same two checks in the parent directory, and so on
+
+`tasks.md` only wins over `index.md` within the *same* directory — an `index.md`
+next to you takes precedence over a `tasks.md` further up the tree. This means
+you can run `todo` from anywhere inside a project and hit the same file.
+
+The walk stops after checking `$HOME`, so a stray `tasks.md` or `index.md`
+above your home directory can't leak into unrelated projects. `$HOME` itself
+*is* checked, so a `~/tasks.md` acts as a personal catch-all for work outside
+any project. Directories outside `$HOME` never cross that boundary, so there
+the walk runs to the filesystem root.
+
+If nothing is found, commands that write (`add`) create `tasks.md` in the
+current directory. `todo init` always creates `tasks.md` in the current
+directory, which is how you shadow an ancestor's task file for a subproject.
+
 ## File Format
 
-Tasks are stored in `todo.md` using GitHub-Flavored Markdown checkbox syntax:
+Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 
 ```markdown
 # My Project
@@ -120,8 +143,8 @@ Tasks are stored in `todo.md` using GitHub-Flavored Markdown checkbox syntax:
 Configuration is loaded from `.todo.toml` (project-local) or `~/.config/todo/config.toml` (global). Local settings override global.
 
 ```toml
-# File to use for tasks (default: "todo.md")
-file = "todo.md"
+# File to use for tasks (default: "tasks.md")
+file = "tasks.md"
 
 [sections]
 todo = "Backlog"

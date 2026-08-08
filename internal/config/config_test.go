@@ -17,8 +17,8 @@ func TestDefaultConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.File != "todo.md" {
-		t.Errorf("expected File='todo.md', got %q", cfg.File)
+	if cfg.File != "tasks.md" {
+		t.Errorf("expected File='tasks.md', got %q", cfg.File)
 	}
 	if cfg.Sections.Todo != "Backlog" {
 		t.Errorf("expected Sections.Todo='Backlog', got %q", cfg.Sections.Todo)
@@ -180,8 +180,8 @@ show_done = false
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// All defaults except show_done
-	if cfg.File != "todo.md" {
-		t.Errorf("expected File='todo.md', got %q", cfg.File)
+	if cfg.File != "tasks.md" {
+		t.Errorf("expected File='tasks.md', got %q", cfg.File)
 	}
 	if cfg.Sections.Todo != "Backlog" {
 		t.Errorf("expected Sections.Todo='Backlog', got %q", cfg.Sections.Todo)

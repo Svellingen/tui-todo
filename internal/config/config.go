@@ -35,7 +35,7 @@ type fileConfig struct {
 
 func defaultConfig() Config {
 	return Config{
-		File: "todo.md",
+		File: "tasks.md",
 		Sections: Sections{
 			Todo:       "Backlog",
 			InProgress: "In Progress",
