@@ -81,7 +81,7 @@ todo
 | Key | Action |
 |-----|--------|
 | `/` | Search by title (live filtering) |
-| `f` | Filter by tag |
+| `T` | Filter by tag |
 | `1` | Show all tasks |
 | `2` | Show active only (todo + in-progress) |
 | `3` | Show done only |

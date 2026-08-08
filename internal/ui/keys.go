@@ -68,5 +68,5 @@ const (
 	KeyFilterDone   = "3"
 	KeySearch       = "/"
 	KeyTag          = "t"
-	KeyFilterTag    = "f"
+	KeyFilterTag    = "T"
 )

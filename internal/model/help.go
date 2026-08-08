@@ -42,7 +42,7 @@ func helpContent() string {
 		}},
 		{"Filtering", []ui.HelpItem{
 			{"/", "Search by title"},
-			{"f", "Filter by tag"},
+			{"T", "Filter by tag"},
 			{"1", "Show all"},
 			{"2", "Active only"},
 			{"3", "Done only"},
