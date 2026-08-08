@@ -269,19 +269,29 @@ func flash(msg string) (string, tea.Cmd) {
 	})
 }
 
-func (a *App) updateListSize() {
-	overhead := 8
+// chromeHeight is the number of rows the view spends on everything that is not
+// the task list: a leading blank, the title, a blank, a trailing blank and the
+// status line, plus whatever the active mode adds.
+//
+// Both the layout and the scroll maths derive the viewport from this, so they
+// cannot drift apart.
+func (a App) chromeHeight() int {
+	overhead := 5
 	if a.mode == modeInput {
 		overhead++
 	}
 	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
 		overhead += len(a.tagOptions) + 1
 	}
-	h := a.height - overhead
+	return overhead
+}
+
+func (a *App) updateListSize() {
+	h := a.height - a.chromeHeight()
 	if h < 3 {
 		h = 3
 	}
-	w := a.width - 4
+	w := a.width
 	if w < 20 {
 		w = 20
 	}
@@ -888,14 +898,7 @@ func (a App) View() string {
 	lines = append(lines, "")
 
 	// Content area
-	overhead := 5
-	if a.mode == modeInput {
-		overhead++
-	}
-	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
-		overhead += len(a.tagOptions) + 1
-	}
-	contentHeight := h - overhead
+	contentHeight := h - a.chromeHeight()
 	if contentHeight < 3 {
 		contentHeight = 3
 	}

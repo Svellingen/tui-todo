@@ -269,40 +269,93 @@ func (m *TaskListModel) SetSize(w, h int) {
 	m.height = h
 }
 
-// cursorLineIndex returns the line index of the cursor in the rendered output.
-func (m TaskListModel) cursorLineIndex() int {
+// itemLineStarts returns, for each item, the rendered line its block begins
+// on. A section's block starts at the blank line separating it from the
+// previous section, so scrolling to it brings the whole header into view.
+//
+// This mirrors the layout in buildAllLines; the two must stay in step.
+func (m TaskListModel) itemLineStarts() []int {
+	starts := make([]int, len(m.items))
 	idx := 0
-	isFirst := true
-	for i := 0; i < len(m.items); i++ {
-		if i == m.cursor {
-			return idx
-		}
-		switch m.items[i].kind {
+	isFirstSection := true
+
+	for i, it := range m.items {
+		starts[i] = idx
+		switch it.kind {
 		case itemSection:
-			if !isFirst {
+			if !isFirstSection {
 				idx++ // blank line between sections
 			}
-			isFirst = false
+			isFirstSection = false
 			idx += 2 // header + separator
 		case itemTask:
 			idx++
 		}
 	}
-	return idx
+	return starts
+}
+
+// cursorAnchorLine returns the first line that must stay visible for the
+// cursor to make sense: the section header block introducing it, when the
+// cursor is the first task under one, otherwise the cursor's own line.
+func (m TaskListModel) cursorAnchorLine(starts []int) int {
+	anchor := m.cursor
+	for anchor > 0 && m.items[anchor-1].kind != itemTask {
+		anchor--
+	}
+	return starts[anchor]
 }
 
 // adjustScroll keeps the cursor visible within the viewport.
 func (m *TaskListModel) adjustScroll() {
-	if m.height <= 0 {
+	if m.height <= 0 || m.cursor < 0 || m.cursor >= len(m.items) {
 		return
 	}
-	curLine := m.cursorLineIndex()
+
+	starts := m.itemLineStarts()
+	curLine := starts[m.cursor]
+	total := len(m.buildAllLines(m.width))
+
+	// Scrolling up: reveal the header block above the cursor rather than
+	// parking the cursor on the top row with its section cut off.
 	if curLine < m.scrollOffset {
-		m.scrollOffset = curLine
+		m.scrollOffset = m.cursorAnchorLine(starts)
 	}
+	// Scrolling down: pull the cursor onto the last row.
 	if curLine >= m.scrollOffset+m.height {
 		m.scrollOffset = curLine - m.height + 1
 	}
+
+	// On the last task there is nothing below to move onto, so show as much of
+	// the document's tail as fits. Without this a trailing header or an empty
+	// final section could never be seen.
+	if m.isLastTask() {
+		target := total - m.height
+		if target > curLine {
+			target = curLine // never push the cursor off the top
+		}
+		if target > m.scrollOffset {
+			m.scrollOffset = target
+		}
+	}
+
+	// Never scroll past either end of the content.
+	if maxOffset := total - m.height; m.scrollOffset > maxOffset {
+		m.scrollOffset = maxOffset
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
+
+// isLastTask reports whether the cursor is on the final task in the list.
+func (m TaskListModel) isLastTask() bool {
+	for i := m.cursor + 1; i < len(m.items); i++ {
+		if m.items[i].kind == itemTask {
+			return false
+		}
+	}
+	return true
 }
 
 // FilterIndicator returns a string showing active filters.
