@@ -30,7 +30,7 @@ func helpContent() string {
 			{"a", "Add new task"},
 			{"e", "Edit task title"},
 			{"d", "Toggle done"},
-			{"x", "Delete task"},
+			{"x", "Delete task (u to undo)"},
 			{"Space", "Cycle status"},
 			{"p", "Cycle priority"},
 			{"t", "Add tag"},

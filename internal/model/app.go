@@ -41,7 +41,6 @@ type appMode int
 const (
 	modeNormal appMode = iota
 	modeInput
-	modeConfirmDelete
 	modeTagSelect
 	modeHelp
 )
@@ -388,18 +387,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	if a.mode == modeConfirmDelete {
-		switch key {
-		case "y":
-			return a.doDelete()
-		default:
-			a.mode = modeNormal
-			a.statusMsg = ""
-			a.updateListSize()
-			return a, nil
-		}
-	}
-
 	if a.mode == modeHelp {
 		switch key {
 		case ui.KeyHelp, "esc":
@@ -500,7 +487,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyEdit:
 		return a.startEdit()
 	case ui.KeyDelete:
-		return a.confirmDelete()
+		return a.doDelete()
 	case ui.KeyStatus:
 		return a.cycleStatus()
 	case ui.KeyPrio:
@@ -729,20 +716,11 @@ func (a *App) addTask(value string) {
 	a.list.rebuildItems()
 }
 
-func (a App) confirmDelete() (tea.Model, tea.Cmd) {
-	if a.list.SelectedTaskItem() == nil {
-		return a, nil
-	}
-	a.mode = modeConfirmDelete
-	a.statusMsg = "Delete? y/n"
-	return a, nil
-}
-
+// doDelete removes the selected task outright. There is no confirmation step:
+// the undo stack makes the deletion recoverable, so the flash points at it.
 func (a App) doDelete() (tea.Model, tea.Cmd) {
 	idx := a.list.SelectedTaskIndex()
 	if idx < 0 {
-		a.mode = modeNormal
-		a.statusMsg = ""
 		return a, nil
 	}
 
@@ -764,11 +742,8 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	a.taskFile.Lines = newLines
 
 	a.list.rebuildItems()
-	a.mode = modeNormal
 
-	var msg string
-	var cmd tea.Cmd
-	msg, cmd = flash("Deleted: " + title)
+	msg, cmd := flash("Deleted: " + title + "  (u to undo)")
 	a.statusMsg = msg
 	return a, tea.Batch(a.save(), cmd)
 }
@@ -964,8 +939,6 @@ func (a App) View() string {
 	status := ""
 	if a.statusMsg != "" {
 		status = "  " + ui.FlashStyle.Render(a.statusMsg)
-	} else if a.mode == modeConfirmDelete {
-		status = "  " + ui.PriorityHigh.Render("Delete?") + " " + ui.HelpBar.Render("y/n")
 	}
 	lines = append(lines, status)
 

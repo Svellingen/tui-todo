@@ -64,7 +64,7 @@ todo
 | `a` | Add new task |
 | `e` | Edit task title |
 | `d` | Toggle done |
-| `x` | Delete task (with confirmation) |
+| `x` | Delete task (no confirmation — use `u` to undo) |
 | `Space` | Cycle status (todo / in-progress / done) |
 | `p` | Cycle priority (none / `!` / `!!`) |
 | `t` | Add tag to task |
@@ -156,7 +156,7 @@ back to polling once a second.
 
 Because a reload replaces the in-memory state, the undo history is cleared —
 replaying it would discard the outside edit. If the file changes while you have
-a modal open (add, edit, delete confirmation), the reload waits until you are
+a modal open (add, edit, tag filter), the reload waits until you are
 back at the list.
 
 Nothing is overwritten silently: if the file changed underneath since the app
