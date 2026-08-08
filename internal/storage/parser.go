@@ -13,8 +13,8 @@ type LineType int
 
 const (
 	LineText    LineType = iota // Non-task text (comments, blank lines, etc.)
-	LineSection                // Section header (## Backlog, ## Done, etc.)
-	LineTask                   // Task checkbox line
+	LineSection                 // Section header (## Backlog, ## Done, etc.)
+	LineTask                    // Task checkbox line
 )
 
 // Line represents a single line in the markdown file, preserving the raw text

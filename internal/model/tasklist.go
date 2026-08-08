@@ -18,15 +18,18 @@ const (
 )
 
 type item struct {
-	kind      itemType
-	section   string
+	kind    itemType
+	section string
+	// lineIndex is the item's position in TaskFile.Lines. Headings are
+	// addressed by it, since two headings can share the same text.
+	lineIndex int
 	taskIndex int
 }
 
 type statusFilter int
 
 const (
-	filterAll    statusFilter = iota
+	filterAll statusFilter = iota
 	filterActive
 	filterDone
 )
@@ -52,16 +55,16 @@ func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
 
 func (m *TaskListModel) rebuildItems() {
 	m.items = nil
-	for _, line := range m.taskFile.Lines {
+	for li, line := range m.taskFile.Lines {
 		switch line.Type {
 		case storage.LineSection:
-			m.items = append(m.items, item{kind: itemSection, section: line.Raw})
+			m.items = append(m.items, item{kind: itemSection, section: line.Raw, lineIndex: li})
 		case storage.LineTask:
 			if m.taskVisible(line.TaskIndex) {
-				m.items = append(m.items, item{kind: itemTask, taskIndex: line.TaskIndex})
+				m.items = append(m.items, item{kind: itemTask, lineIndex: li, taskIndex: line.TaskIndex})
 			}
 		case storage.LineText:
-			m.items = append(m.items, item{kind: itemBlank})
+			m.items = append(m.items, item{kind: itemBlank, lineIndex: li})
 		}
 	}
 	m.cursor = 0
@@ -320,35 +323,97 @@ func (m *TaskListModel) PageUp() {
 	m.adjustScroll()
 }
 
+// JumpNextSection selects the next heading. Headings are cursor stops of their
+// own, so this lands on the heading rather than the first task beneath it.
 func (m *TaskListModel) JumpNextSection() {
 	for i := m.cursor + 1; i < len(m.items); i++ {
 		if m.items[i].kind == itemSection {
-			m.moveToNextTask(i + 1)
+			m.cursor = i
 			m.adjustScroll()
 			return
 		}
 	}
 }
 
+// JumpPrevSection selects the nearest heading above the cursor. From a task
+// that is the task's own heading; from a heading it is the one before it.
 func (m *TaskListModel) JumpPrevSection() {
-	currentSection := -1
-	for i := m.cursor; i >= 0; i-- {
+	for i := m.cursor - 1; i >= 0; i-- {
 		if m.items[i].kind == itemSection {
-			currentSection = i
-			break
-		}
-	}
-	if currentSection <= 0 {
-		return
-	}
-	for i := currentSection - 1; i >= 0; i-- {
-		if m.items[i].kind == itemSection {
-			m.moveToNextTask(i + 1)
+			m.cursor = i
 			m.adjustScroll()
 			return
 		}
 	}
 }
+
+// SelectedLineIndex returns the Lines index of whatever the cursor is on,
+// heading or task, or -1 when nothing is selected.
+func (m TaskListModel) SelectedLineIndex() int {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return -1
+	}
+	if m.items[m.cursor].kind == itemBlank {
+		return -1
+	}
+	return m.items[m.cursor].lineIndex
+}
+
+// SelectedSectionLine returns the Lines index of the heading under the cursor,
+// or -1 when the cursor is on a task.
+func (m TaskListModel) SelectedSectionLine() int {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return -1
+	}
+	if m.items[m.cursor].kind != itemSection {
+		return -1
+	}
+	return m.items[m.cursor].lineIndex
+}
+
+// SelectTask rebuilds the list and puts the cursor on the given task.
+func (m *TaskListModel) SelectTask(taskIndex int) {
+	m.rebuildItems()
+	for i, it := range m.items {
+		if it.kind == itemTask && it.taskIndex == taskIndex {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// RestoreCursorNear rebuilds the list and puts the cursor as close to pos as
+// the new contents allow, used after a deletion changes the item count.
+func (m *TaskListModel) RestoreCursorNear(pos int) {
+	m.rebuildItems()
+	if len(m.items) == 0 {
+		return
+	}
+	if pos >= len(m.items) {
+		pos = len(m.items) - 1
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	for i := pos; i < len(m.items); i++ {
+		if m.items[i].kind != itemBlank {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+	for i := pos; i >= 0; i-- {
+		if m.items[i].kind != itemBlank {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
+}
+
+// Cursor returns the index of the selected item.
+func (m TaskListModel) Cursor() int { return m.cursor }
 
 func (m *TaskListModel) SetSize(w, h int) {
 	m.width = w
@@ -367,6 +432,11 @@ func (m TaskListModel) itemLineStarts() []int {
 // cursor to make sense: the section header block introducing it, when the
 // cursor is the first task under one, otherwise the cursor's own line.
 func (m TaskListModel) cursorAnchorLine(starts []int) int {
+	// A heading is its own anchor; walking further back would drag in the
+	// heading above it.
+	if m.items[m.cursor].kind == itemSection {
+		return starts[m.cursor]
+	}
 	anchor := m.cursor
 	for anchor > 0 && m.items[anchor-1].kind != itemTask {
 		anchor--
@@ -479,15 +549,21 @@ func (m TaskListModel) ProgressCounts() (done, total int) {
 	return
 }
 
-// renderHeading draws a markdown heading the way the file writes it, coloured
-// by level.
-func renderHeading(raw string) string {
+// renderHeading draws a markdown heading's text, coloured by level. The "#"
+// markers are dropped -- the colour carries the level. The cursor sits in the
+// same column as it does on task rows.
+func renderHeading(raw string, selected bool) string {
+	cursor := "   "
+	if selected {
+		cursor = ui.CursorStyle.Render(" ▸ ")
+	}
+
 	trimmed := strings.TrimSpace(raw)
 	level, name := storage.ParseHeading(trimmed)
 	if level == 0 {
-		return ui.HeadingStyle(1).Render(trimmed)
+		return cursor + ui.HeadingStyle(1).Render(trimmed)
 	}
-	return ui.HeadingStyle(level).Render(strings.Repeat("#", level) + " " + name)
+	return cursor + ui.HeadingStyle(level).Render(name)
 }
 
 // buildLines renders the list and records, for each item, the line its block
@@ -533,7 +609,7 @@ func (m TaskListModel) buildLines() (lines []string, starts []int) {
 				lines = append(lines, "")
 			}
 			isFirstSection = false
-			lines = append(lines, "  "+renderHeading(it.section))
+			lines = append(lines, renderHeading(it.section, i == m.cursor))
 
 		case itemTask:
 			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor))
@@ -693,4 +769,3 @@ func (m TaskListModel) SelectedTaskIndex() int {
 	}
 	return it.taskIndex
 }
-

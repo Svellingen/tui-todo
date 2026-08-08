@@ -21,16 +21,16 @@ func helpContent() string {
 	}{
 		{"Navigation", []ui.HelpItem{
 			{"j / k, ↓ / ↑", "Move down / up"},
-			{"tab / S-tab", "Jump next / prev section (or J / K)"},
+			{"tab / S-tab", "Select next / prev heading (or J / K)"},
 			{"gg / G", "Jump to top / bottom"},
 			{"ctrl+d/ctrl+u", "Page down / up"},
 			{"alt+j / alt+k", "Move task down / up in its group"},
 		}},
 		{"Actions", []ui.HelpItem{
-			{"a", "Add new task"},
+			{"a", "Add task below the selection"},
 			{"e", "Edit task title"},
 			{"d", "Toggle done"},
-			{"x", "Delete task (u to undo)"},
+			{"x", "Delete task, or heading + contents"},
 			{"Space", "Cycle status"},
 			{"p", "Cycle priority"},
 			{"t", "Add tag"},

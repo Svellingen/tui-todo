@@ -51,7 +51,7 @@ todo
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `↓` / `↑` | Move down / up |
-| `tab` / `shift+tab` | Jump to the first task of the next / previous section |
+| `tab` / `shift+tab` | Select the next / previous heading |
 | `J` / `K` | Same jump, vim-style |
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
@@ -61,10 +61,10 @@ todo
 
 | Key | Action |
 |-----|--------|
-| `a` | Add new task |
+| `a` | Add a task next to the selection — below the current task, or under the current heading |
 | `e` | Edit task title |
 | `d` | Toggle done |
-| `x` | Delete task (no confirmation — use `u` to undo) |
+| `x` | Delete the task, or the selected heading and everything under it |
 | `Space` | Cycle status (todo / in-progress / done) |
 | `p` | Cycle priority (none / `!` / `!!`) |
 | `t` | Add tag to task |
@@ -114,8 +114,8 @@ directory, which is how you shadow an ancestor's task file for a subproject.
 
 ## Headings
 
-Headings of every level (`#` through `######`) are parsed and shown as written,
-coloured by level:
+Headings of every level (`#` through `######`) are parsed and shown by name —
+the `#` markers are dropped, since the colour already carries the level:
 
 | Level | Colour |
 |-------|--------|
@@ -127,6 +127,23 @@ coloured by level:
 Levels beyond the fourth cycle back through the same four colours. Every
 heading starts a new section, so tasks group and sort under sub-headings as
 well as top-level ones.
+
+### Selecting headings
+
+`tab` and `shift+tab` select headings themselves; `j` and `k` step over them
+between tasks. With a heading selected:
+
+- `a` adds a task directly beneath it rather than in the Backlog section.
+  From a task, `a` instead adds directly below that task, keeping it in the
+  same section.
+- `x` deletes the heading together with everything nested under it — its
+  sub-headings, their tasks, and any prose in between, up to the next heading
+  of the same or shallower level. This one asks for confirmation first, naming
+  what will go: `Delete "Alpha" with 2 sub-headings and 4 tasks? y/n`. It is
+  still undoable with `u`.
+
+Actions that need a task — `d`, `Space`, `p`, `e`, `t`, `alt+j`/`alt+k` — do
+nothing while a heading is selected.
 
 ## Sorting
 
@@ -189,12 +206,12 @@ Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 
 ## Backlog
 
-- [ ] !!! Set up CI pipeline +devops
+- [ ] !! Set up CI pipeline +devops
 - [ ] ! Write README +docs
 
 ## In Progress
 
-- [-] !!! Design TUI layout +design
+- [-] !! Design TUI layout +design
 
 ## Done
 
@@ -204,7 +221,7 @@ Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 ### Task Syntax
 
 ```
-- [ ] !!! Title +tag @context due:2026-03-01
+- [ ] !! Title +tag @context due:2026-03-01
 ```
 
 - `- [ ]` todo, `- [-]` in-progress, `- [x]` done

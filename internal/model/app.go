@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,6 +44,9 @@ const (
 	modeInput
 	modeTagSelect
 	modeHelp
+	// modeConfirmDeleteSection guards the one destructive action undo alone
+	// does not make obvious: removing a heading takes its whole subtree.
+	modeConfirmDeleteSection
 )
 
 type undoEntry struct {
@@ -85,12 +89,17 @@ type App struct {
 
 	// pendingG records a bare "g", waiting to see whether it becomes "gg".
 	pendingG bool
+
+	// addAnchorLine is the Lines index the in-flight add was started from -- a
+	// heading or a task -- or -1 when nothing was selected.
+	addAnchorLine int
 }
 
 func NewApp(store *storage.Store) App {
 	return App{
-		store: store,
-		input: NewTaskInput(),
+		store:         store,
+		input:         NewTaskInput(),
+		addAnchorLine: -1,
 	}
 }
 
@@ -387,6 +396,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if a.mode == modeConfirmDeleteSection {
+		a.mode = modeNormal
+		a.statusMsg = ""
+		if key == "y" {
+			return a.doDeleteSection()
+		}
+		return a, nil
+	}
+
 	if a.mode == modeHelp {
 		switch key {
 		case ui.KeyHelp, "esc":
@@ -428,6 +446,7 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if a.input.Mode() == inputSearch {
 				a.list.ClearSearch()
 			}
+			a.addAnchorLine = -1
 			a.input.Cancel()
 			a.mode = modeNormal
 			a.updateListSize()
@@ -481,12 +500,16 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.toggleDone()
 	case ui.KeyAdd:
 		a.mode = modeInput
+		a.addAnchorLine = a.list.SelectedLineIndex()
 		a.input.StartAdd()
 		a.updateListSize()
 		return a, nil
 	case ui.KeyEdit:
 		return a.startEdit()
 	case ui.KeyDelete:
+		if a.list.SelectedSectionLine() >= 0 {
+			return a.confirmDeleteSection()
+		}
 		return a.doDelete()
 	case ui.KeyStatus:
 		return a.cycleStatus()
@@ -607,6 +630,7 @@ func (a App) startEdit() (tea.Model, tea.Cmd) {
 func (a App) commitInput() (tea.Model, tea.Cmd) {
 	value := strings.TrimSpace(a.input.Value())
 	if value == "" {
+		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
 		a.updateListSize()
@@ -617,15 +641,18 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 
 	switch a.input.Mode() {
 	case inputAdd:
-		a.addTask(value)
-		var msg string
-		var cmd tea.Cmd
-		msg, cmd = flash("Added: " + value)
+		idx := a.addTask(value)
+		msg, cmd := flash("Added: " + value)
 		a.statusMsg = msg
+		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
 		a.updateListSize()
-		return a, tea.Batch(a.save(), cmd)
+		saveCmd := a.save()
+		// Land on the task just created. This also rebuilds the item list,
+		// which a save alone only does when the sort order actually moved.
+		a.list.SelectTask(idx)
+		return a, tea.Batch(saveCmd, cmd)
 
 	case inputEdit:
 		idx := a.input.EditIndex()
@@ -642,12 +669,14 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 				a.taskFile.Tasks[idx].DueDate = dueDate
 			}
 		}
+		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
 		a.updateListSize()
 		return a, a.save()
 
 	case inputSearch:
+		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
 		a.updateListSize()
@@ -659,19 +688,22 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 			a.pushUndo("add tag")
 			a.taskFile.Tasks[idx].Tags = append(a.taskFile.Tasks[idx].Tags, value)
 		}
+		a.addAnchorLine = -1
 		a.input.Cancel()
 		a.mode = modeNormal
 		a.updateListSize()
 		return a, a.save()
 	}
 
+	a.addAnchorLine = -1
 	a.input.Cancel()
 	a.mode = modeNormal
 	a.updateListSize()
 	return a, nil
 }
 
-func (a *App) addTask(value string) {
+// addTask inserts a task and returns its index in TaskFile.Tasks.
+func (a *App) addTask(value string) int {
 	title, priority, tags, dueDate := storage.ParseMetadata(value)
 	newTask := task.Task{
 		Title:    title,
@@ -680,6 +712,27 @@ func (a *App) addTask(value string) {
 		Tags:     tags,
 		DueDate:  dueDate,
 	}
+
+	// The new task goes next to whatever the cursor was on: beneath a selected
+	// heading, or directly after a selected task so it stays in that task's
+	// section. Only with nothing selected does it fall back to Backlog.
+	if line := a.addAnchorLine; line >= 0 && line < len(a.taskFile.Lines) {
+		a.addAnchorLine = -1
+
+		var idx int
+		switch a.taskFile.Lines[line].Type {
+		case storage.LineSection:
+			idx = a.taskFile.InsertTaskUnder(line, newTask)
+		case storage.LineTask:
+			idx = a.taskFile.InsertTaskAfter(line, newTask)
+		default:
+			idx = -1
+		}
+		if idx >= 0 {
+			return idx
+		}
+	}
+
 	a.taskFile.Tasks = append(a.taskFile.Tasks, newTask)
 
 	newLine := storage.Line{
@@ -714,6 +767,58 @@ func (a *App) addTask(value string) {
 	}
 
 	a.list.rebuildItems()
+	return newLine.TaskIndex
+}
+
+// confirmDeleteSection asks before removing a heading, because the blast
+// radius is larger than what the cursor is sitting on.
+func (a App) confirmDeleteSection() (tea.Model, tea.Cmd) {
+	line := a.list.SelectedSectionLine()
+	span, ok := a.taskFile.Span(line)
+	if !ok {
+		return a, nil
+	}
+
+	what := fmt.Sprintf("Delete %q", span.Name)
+	switch {
+	case span.Headings > 0:
+		what += fmt.Sprintf(" with %s and %s",
+			plural(span.Headings, "sub-heading"), plural(span.Tasks, "task"))
+	case span.Tasks > 0:
+		what += fmt.Sprintf(" and %s", plural(span.Tasks, "task"))
+	}
+
+	a.mode = modeConfirmDeleteSection
+	a.statusMsg = what + "? y/n"
+	return a, nil
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, word)
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// doDeleteSection removes the heading under the cursor and everything nested
+// beneath it.
+func (a App) doDeleteSection() (tea.Model, tea.Cmd) {
+	line := a.list.SelectedSectionLine()
+	span, ok := a.taskFile.Span(line)
+	if !ok {
+		return a, nil
+	}
+
+	a.pushUndo("delete section")
+	pos := a.list.Cursor()
+	if !a.taskFile.DeleteSection(line) {
+		return a, nil
+	}
+	a.list.RestoreCursorNear(pos)
+
+	msg, cmd := flash("Deleted: " + span.Name + "  (u to undo)")
+	a.statusMsg = msg
+	return a, tea.Batch(a.save(), cmd)
 }
 
 // doDelete removes the selected task outright. There is no confirmation step:
@@ -937,7 +1042,10 @@ func (a App) View() string {
 	// Status line. Kept even when empty so the list does not jump as flash
 	// messages come and go.
 	status := ""
-	if a.statusMsg != "" {
+	switch {
+	case a.mode == modeConfirmDeleteSection:
+		status = "  " + ui.PriorityHigh.Render(a.statusMsg)
+	case a.statusMsg != "":
 		status = "  " + ui.FlashStyle.Render(a.statusMsg)
 	}
 	lines = append(lines, status)

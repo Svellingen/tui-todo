@@ -69,7 +69,7 @@ func TestScrollBackToTopShowsHeaders(t *testing.T) {
 	}
 
 	lines := m.ViewLines(80, 10)
-	if len(lines) == 0 || !strings.Contains(lines[0], "## Alpha") {
+	if len(lines) == 0 || !strings.Contains(lines[0], "Alpha") {
 		t.Errorf("expected the first header on the first line, got %q", lines[0])
 	}
 }
@@ -98,7 +98,7 @@ func TestScrollUpRevealsSectionHeader(t *testing.T) {
 	}
 
 	joined := strings.Join(m.ViewLines(80, 8), "\n")
-	if !strings.Contains(joined, "## Beta") {
+	if !strings.Contains(joined, "Beta") {
 		t.Errorf("expected the Beta header to be visible, got:\n%s", joined)
 	}
 }
@@ -148,7 +148,7 @@ func TestScrollAtEndShowsTrailingContent(t *testing.T) {
 	m.toBottom()
 
 	joined := strings.Join(m.ViewLines(80, 10), "\n")
-	if !strings.Contains(joined, "## Omega") {
+	if !strings.Contains(joined, "Omega") {
 		t.Errorf("expected the trailing Omega header to be visible, got:\n%s", joined)
 	}
 
