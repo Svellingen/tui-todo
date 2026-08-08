@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -636,10 +637,43 @@ func editorArgv() []string {
 	return []string{"vi"}
 }
 
+// editorsTakingPlusLine open at a line when passed "+N". Editors outside this
+// set get no line argument, since an unrecognised "+12" would be taken for a
+// second file to open.
+var editorsTakingPlusLine = map[string]bool{
+	"vi": true, "vim": true, "nvim": true, "view": true, "vimdiff": true,
+	"nano": true, "pico": true, "emacs": true, "emacsclient": true,
+	"micro": true, "joe": true, "kak": true,
+}
+
+// selectedFileLine returns the 1-based file line of whatever the cursor is on,
+// or 0 when there is nothing to point at. Lines holds one entry per line of
+// the file, in order, so the index is the line number less one.
+func (a App) selectedFileLine() int {
+	if a.taskFile == nil {
+		return 0
+	}
+	idx := a.list.SelectedLineIndex()
+	if idx < 0 || idx >= len(a.taskFile.Lines) {
+		return 0
+	}
+	return idx + 1
+}
+
+// editorInvocation builds the command line for opening path, adding a "+N"
+// line argument when the editor is known to understand one.
+func editorInvocation(editor []string, path string, line int) []string {
+	argv := slices.Clone(editor)
+	if line > 0 && editorsTakingPlusLine[filepath.Base(argv[0])] {
+		argv = append(argv, fmt.Sprintf("+%d", line))
+	}
+	return append(argv, path)
+}
+
 // openInEditor hands the terminal over to an editor for the task file and
-// reloads once it exits.
+// reloads once it exits. The editor opens on the selected task or heading.
 func (a App) openInEditor() (tea.Model, tea.Cmd) {
-	argv := append(editorArgv(), a.store.FilePath)
+	argv := editorInvocation(editorArgv(), a.store.FilePath, a.selectedFileLine())
 	c := exec.Command(argv[0], argv[1:]...)
 	return a, tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err: err}

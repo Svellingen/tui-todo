@@ -191,9 +191,14 @@ cursor following the task rather than staying at the same screen position.
 
 ## Editing in an Editor
 
-Pressing `o` hands the terminal to your editor on the task file. Quitting the
-editor returns to the TUI, which reloads whatever you saved; the cursor stays
-on the task it was on. Quitting without saving changes nothing.
+Pressing `o` hands the terminal to your editor on the task file, opening on the
+line of the task or heading you had selected. Quitting the editor returns to
+the TUI, which reloads whatever you saved; the cursor stays on the task it was
+on. Quitting without saving changes nothing.
+
+The line is passed as `+N`, which vi, vim, nvim, nano, emacs, micro, joe and
+kak understand. Any other editor is opened on the file without a line
+argument, since an unrecognised `+N` would be taken for a second file to open.
 
 The editor is `$VISUAL`, else `$EDITOR`, else `nvim` if installed, else `vi`.
 Both variables may carry arguments, as in `EDITOR="code -w"`.
