@@ -65,6 +65,7 @@ todo
 | `p` | Cycle priority (none / low / medium / high) |
 | `t` | Add tag to task |
 | `u` | Undo last action |
+| `o` | Open the task file in an editor |
 
 ### Filtering
 
@@ -105,6 +106,15 @@ the walk runs to the filesystem root.
 If nothing is found, commands that write (`add`) create `tasks.md` in the
 current directory. `todo init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
+
+## Editing in an Editor
+
+Pressing `o` hands the terminal to your editor on the task file. Quitting the
+editor returns to the TUI, which reloads whatever you saved; the cursor stays
+on the task it was on. Quitting without saving changes nothing.
+
+The editor is `$VISUAL`, else `$EDITOR`, else `nvim` if installed, else `vi`.
+Both variables may carry arguments, as in `EDITOR="code -w"`.
 
 ## Outside Edits
 

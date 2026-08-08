@@ -33,6 +33,7 @@ func helpContent() string {
 			{"p", "Cycle priority"},
 			{"t", "Add tag"},
 			{"u", "Undo"},
+			{"o", "Open file in editor"},
 		}},
 		{"Filtering", []ui.HelpItem{
 			{"/", "Search by title"},

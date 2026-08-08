@@ -2,6 +2,7 @@ package model
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -287,6 +288,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statusMsg, cmd = flash("Reloaded from disk")
 		return a, cmd
 
+	case editorFinishedMsg:
+		if msg.err != nil {
+			a.err = msg.err
+			return a, nil
+		}
+		// The watch may already have reported the editor's save while the app
+		// was suspended; checking again is harmless when nothing changed.
+		a.pendingReload = false
+		return a, a.checkReload()
+
 	case errMsg:
 		a.err = msg.err
 		return a, nil
@@ -417,6 +428,8 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.cyclePriority()
 	case ui.KeyUndo:
 		return a.undo()
+	case ui.KeyOpen:
+		return a.openInEditor()
 	case ui.KeyFilterAll:
 		a.list.SetStatusFilter(filterAll)
 	case ui.KeyFilterActive:
@@ -438,6 +451,36 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// editorFinishedMsg reports that the editor subprocess exited.
+type editorFinishedMsg struct{ err error }
+
+// editorArgv picks the editor to hand the task file to, following the usual
+// convention: $VISUAL, then $EDITOR, then a sensible default. Either variable
+// may carry arguments, as in "code -w", so they are split.
+func editorArgv() []string {
+	for _, name := range []string{"VISUAL", "EDITOR"} {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			if fields := strings.Fields(v); len(fields) > 0 {
+				return fields
+			}
+		}
+	}
+	if _, err := exec.LookPath("nvim"); err == nil {
+		return []string{"nvim"}
+	}
+	return []string{"vi"}
+}
+
+// openInEditor hands the terminal over to an editor for the task file and
+// reloads once it exits.
+func (a App) openInEditor() (tea.Model, tea.Cmd) {
+	argv := append(editorArgv(), a.store.FilePath)
+	c := exec.Command(argv[0], argv[1:]...)
+	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err: err}
+	})
 }
 
 func (a App) toggleDone() (tea.Model, tea.Cmd) {

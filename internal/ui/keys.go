@@ -22,6 +22,7 @@ const (
 	KeyStatus = " "
 	KeyPrio   = "p"
 	KeyUndo   = "u"
+	KeyOpen   = "o"
 
 	KeyFilterAll    = "1"
 	KeyFilterActive = "2"
