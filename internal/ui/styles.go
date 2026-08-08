@@ -51,31 +51,6 @@ var (
 	FilterBadge    = lipgloss.NewStyle().Foreground(ColorCyan).Bold(true)
 )
 
-// PadLine wraps content in border chars, padding to innerWidth:
-//
-//	│ content              │
-func PadLine(content string, innerWidth int, fg lipgloss.TerminalColor) string {
-	bc := lipgloss.NewStyle().Foreground(fg)
-	visWidth := lipgloss.Width(content)
-	pad := innerWidth - visWidth
-	if pad < 0 {
-		pad = 0
-	}
-	return bc.Render("│") + " " + content + strings.Repeat(" ", pad) + " " + bc.Render("│")
-}
-
-// HorizRule builds a horizontal border line: left────...────right
-func HorizRule(left, right string, width int, fg lipgloss.TerminalColor) string {
-	bc := lipgloss.NewStyle().Foreground(fg)
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
-	inner := width - leftW - rightW
-	if inner < 0 {
-		inner = 0
-	}
-	return bc.Render(left + strings.Repeat("─", inner) + right)
-}
-
 // AlignLR left-right aligns two strings within a given width.
 func AlignLR(left, right string, width int) string {
 	lw := lipgloss.Width(left)
@@ -91,15 +66,6 @@ func AlignLR(left, right string, width int) string {
 type HelpItem struct {
 	Key  string
 	Desc string
-}
-
-// RenderHelpBar formats help items: key desc · key desc · ...
-func RenderHelpBar(items []HelpItem) string {
-	var parts []string
-	for _, it := range items {
-		parts = append(parts, HelpKey.Render(it.Key)+" "+HelpBar.Render(it.Desc))
-	}
-	return strings.Join(parts, HelpBar.Render("  ·  "))
 }
 
 // RenderProgressBar renders: 3/8 ████░░░░

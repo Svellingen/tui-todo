@@ -854,16 +854,12 @@ func (a App) View() string {
 		h = 24
 	}
 
-	bc := ui.ColorBorder
-	innerWidth := w - 4 // border + padding
+	innerWidth := w
 
 	var lines []string
 
-	// Top border: ╭──────────────╮
-	lines = append(lines, ui.HorizRule("╭", "╮", w, bc))
-
-	// Blank line
-	lines = append(lines, ui.PadLine("", innerWidth, bc))
+	// Leading blank line
+	lines = append(lines, "")
 
 	// Title bar: ✦ ~/work/proj/tasks.md      [filter] 3/8 ████░░░░
 	var titleRight string
@@ -886,14 +882,13 @@ func (a App) View() string {
 	}
 	titleLeft := ui.TitleStyle.Render("✦ "+label) + filterPart
 
-	titleLine := ui.AlignLR(titleLeft, titleRight, innerWidth)
-	lines = append(lines, ui.PadLine(titleLine, innerWidth, bc))
+	lines = append(lines, ui.AlignLR(titleLeft, titleRight, innerWidth))
 
 	// Blank line
-	lines = append(lines, ui.PadLine("", innerWidth, bc))
+	lines = append(lines, "")
 
 	// Content area
-	overhead := 8
+	overhead := 5
 	if a.mode == modeInput {
 		overhead++
 	}
@@ -906,12 +901,10 @@ func (a App) View() string {
 	}
 
 	contentLines := a.list.ViewLines(innerWidth, contentHeight)
-	for _, cl := range contentLines {
-		lines = append(lines, ui.PadLine(cl, innerWidth, bc))
-	}
+	lines = append(lines, contentLines...)
 
 	// Trailing blank
-	lines = append(lines, ui.PadLine("", innerWidth, bc))
+	lines = append(lines, "")
 
 	// Input area (if active)
 	if a.mode == modeInput {
@@ -926,52 +919,32 @@ func (a App) View() string {
 		case inputTag:
 			prefix = ui.InputLabel.Render("  Tag: ")
 		}
-		lines = append(lines, ui.PadLine(prefix+a.input.View(), innerWidth, bc))
+		lines = append(lines, prefix+a.input.View())
 	}
 
 	// Tag selector (if active)
 	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
-		lines = append(lines, ui.PadLine("  "+ui.InputLabel.Render("Filter by tag:"), innerWidth, bc))
+		lines = append(lines, "  "+ui.InputLabel.Render("Filter by tag:"))
 		for i, tag := range a.tagOptions {
 			cursor := "    "
 			if i == a.tagCursor {
 				cursor = ui.CursorStyle.Render("  ▸ ")
 			}
-			lines = append(lines, ui.PadLine(cursor+ui.Tag.Render("+"+tag), innerWidth, bc))
+			lines = append(lines, cursor+ui.Tag.Render("+"+tag))
 		}
 	}
 
-	// Separator: ├──────────────┤
-	lines = append(lines, ui.HorizRule("├", "┤", w, bc))
-
-	// Help/status bar
-	var footer string
+	// Status line. Kept even when empty so the list does not jump as flash
+	// messages come and go.
+	status := ""
 	if a.statusMsg != "" {
-		footer = "  " + ui.FlashStyle.Render(a.statusMsg)
+		status = "  " + ui.FlashStyle.Render(a.statusMsg)
 	} else if a.mode == modeConfirmDelete {
-		footer = "  " + ui.PriorityHigh.Render("Delete?") + " " + ui.HelpBar.Render("y/n")
-	} else {
-		footer = "  " + ui.RenderHelpBar(normalHelpItems())
+		status = "  " + ui.PriorityHigh.Render("Delete?") + " " + ui.HelpBar.Render("y/n")
 	}
-	lines = append(lines, ui.PadLine(footer, innerWidth, bc))
-
-	// Bottom border: ╰──────────────╯
-	lines = append(lines, ui.HorizRule("╰", "╯", w, bc))
+	lines = append(lines, status)
 
 	return strings.Join(lines, "\n")
-}
-
-func normalHelpItems() []ui.HelpItem {
-	return []ui.HelpItem{
-		{"j/k", "move"},
-		{"d", "done"},
-		{"a", "add"},
-		{"e", "edit"},
-		{"p", "prio"},
-		{"/", "search"},
-		{"?", "help"},
-		{"q", "quit"},
-	}
 }
 
 func (a App) renderHelpOverlay() string {
