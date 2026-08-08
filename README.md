@@ -82,6 +82,7 @@ todo
 
 | Key | Action |
 |-----|--------|
+| `i` | Toggle the task file's path in the title bar (off by default) |
 | `?` | Toggle help overlay |
 | `q` | Quit |
 

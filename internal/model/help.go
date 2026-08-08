@@ -44,6 +44,7 @@ func helpContent() string {
 			{"3", "Done only"},
 		}},
 		{"General", []ui.HelpItem{
+			{"i", "Toggle the file path in the title"},
 			{"?", "Toggle this help"},
 			{"q", "Quit"},
 			{"Ctrl+C", "Quit"},

@@ -3,6 +3,7 @@ package model
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -78,6 +79,10 @@ type App struct {
 	// pendingReload records a change that arrived while a modal was open, to
 	// be applied once the app is back at the list.
 	pendingReload bool
+
+	// showFilename swaps the title bar between the app name and the task
+	// file's path. Off by default; toggled with "i" and not persisted.
+	showFilename bool
 }
 
 func NewApp(store *storage.Store) App {
@@ -472,6 +477,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.undo()
 	case ui.KeyOpen:
 		return a.openInEditor()
+	case ui.KeyToggleFilename:
+		a.showFilename = !a.showFilename
+		return a, nil
 	case ui.KeyFilterAll:
 		a.list.SetStatusFilter(filterAll)
 	case ui.KeyFilterActive:
@@ -493,6 +501,31 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// headerPath renders the task file's location for the title bar: absolute,
+// with $HOME collapsed to "~", elided from the left when it does not fit so
+// the filename itself always stays visible.
+func headerPath(path string, width int) string {
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if rel, relErr := filepath.Rel(home, path); relErr == nil && !strings.HasPrefix(rel, "..") {
+			path = filepath.Join("~", rel)
+		}
+	}
+
+	if width <= 0 || lipgloss.Width(path) <= width {
+		return path
+	}
+
+	runes := []rune(path)
+	keep := width - 1 // one cell for the ellipsis
+	if keep < 1 {
+		return "…"
+	}
+	if keep > len(runes) {
+		keep = len(runes)
+	}
+	return "…" + string(runes[len(runes)-keep:])
 }
 
 // editorFinishedMsg reports that the editor subprocess exited.
@@ -832,17 +865,26 @@ func (a App) View() string {
 	// Blank line
 	lines = append(lines, ui.PadLine("", innerWidth, bc))
 
-	// Title bar: ✦ todo              [filter] 3/8 ████░░░░
-	titleLeft := ui.TitleStyle.Render("✦ todo")
-	if fi := a.list.FilterIndicator(); fi != "" {
-		titleLeft += "  " + ui.FilterBadge.Render(fi)
-	}
-
+	// Title bar: ✦ ~/work/proj/tasks.md      [filter] 3/8 ████░░░░
 	var titleRight string
 	done, total := a.list.ProgressCounts()
 	if total > 0 {
 		titleRight = ui.RenderProgressBar(done, total, 8)
 	}
+
+	var filterPart string
+	if fi := a.list.FilterIndicator(); fi != "" {
+		filterPart = "  " + ui.FilterBadge.Render(fi)
+	}
+
+	label := "todo"
+	if a.showFilename {
+		// The path gets whatever the progress bar, the filter badge, the "✦ "
+		// prefix and a two-cell gap leave behind.
+		budget := innerWidth - lipgloss.Width(titleRight) - lipgloss.Width(filterPart) - 4
+		label = headerPath(a.store.FilePath, budget)
+	}
+	titleLeft := ui.TitleStyle.Render("✦ "+label) + filterPart
 
 	titleLine := ui.AlignLR(titleLeft, titleRight, innerWidth)
 	lines = append(lines, ui.PadLine(titleLine, innerWidth, bc))

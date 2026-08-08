@@ -28,6 +28,9 @@ const (
 	KeyUndo   = "u"
 	KeyOpen   = "o"
 
+	// Toggle the task file's path in the title bar.
+	KeyToggleFilename = "i"
+
 	KeyFilterAll    = "1"
 	KeyFilterActive = "2"
 	KeyFilterDone   = "3"
