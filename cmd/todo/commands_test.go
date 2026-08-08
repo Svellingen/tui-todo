@@ -31,7 +31,7 @@ func runCmd(t *testing.T, existingContent string, args ...string) (string, error
 	}
 
 	var buf bytes.Buffer
-	cmd := newRootCmd(&buf, func() error { return nil })
+	cmd := newRootCmd(&buf, func(*storage.Store) error { return nil })
 	cmd.SetArgs(args)
 	execErr := cmd.Execute()
 	return buf.String(), execErr
@@ -49,7 +49,7 @@ func readFile(t *testing.T) string {
 
 func TestRootCommandHasSubcommands(t *testing.T) {
 	var buf bytes.Buffer
-	cmd := newRootCmd(&buf, func() error { return nil })
+	cmd := newRootCmd(&buf, func(*storage.Store) error { return nil })
 
 	// Verify expected subcommands exist
 	subcommands := make(map[string]bool)
@@ -198,7 +198,7 @@ func TestCommandsResolveAncestorFile(t *testing.T) {
 	t.Cleanup(func() { os.Chdir(origDir) })
 
 	var buf bytes.Buffer
-	cmd := newRootCmd(&buf, func() error { return nil })
+	cmd := newRootCmd(&buf, func(*storage.Store) error { return nil })
 	cmd.SetArgs([]string{"add", "From subdir"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -224,5 +224,108 @@ func TestDoneNonNumeric(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid task number") {
 		t.Errorf("expected 'invalid task number' error, got: %v", err)
+	}
+}
+
+// runCmdIn runs a command in dir, returning its output and error.
+func runCmdIn(t *testing.T, dir string, args ...string) (string, error) {
+	t.Helper()
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	var buf bytes.Buffer
+	cmd := newRootCmd(&buf, func(*storage.Store) error { return nil })
+	cmd.SetArgs(args)
+	// Execute before reading the buffer: return values are evaluated left to
+	// right, so inlining these would capture the output before it is written.
+	execErr := cmd.Execute()
+	return buf.String(), execErr
+}
+
+// --file picks the named file over whatever resolution would have found.
+func TestFileFlagOverridesResolution(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte("## Backlog\n- [ ] resolved\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "other.md"), []byte("## Backlog\n- [ ] explicit\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runCmdIn(t, dir, "--file", "other.md", "list")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "explicit") || strings.Contains(out, "resolved") {
+		t.Errorf("expected only the explicit file's task, got:\n%s", out)
+	}
+}
+
+// A missing --file is an error, never a reason to fall back to resolution.
+func TestFileFlagMissingDoesNotFallBack(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tasks.md"), []byte("## Backlog\n- [ ] resolved\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{
+		{"--file", "nope.md", "list"},
+		{"--file", "nope.md", "add", "x"},
+		{"--file", "nope.md", "done", "1"},
+	} {
+		out, err := runCmdIn(t, dir, args...)
+		if err == nil {
+			t.Fatalf("%v: expected an error, got output %q", args, out)
+		}
+		if !strings.Contains(err.Error(), "file not found: nope.md") {
+			t.Errorf("%v: expected a not-found error, got %v", args, err)
+		}
+		if strings.Contains(out, "resolved") {
+			t.Errorf("%v: fell back to the resolved file", args)
+		}
+	}
+
+	// The file it would have fallen back to must be untouched.
+	data, err := os.ReadFile(filepath.Join(dir, "tasks.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "## Backlog\n- [ ] resolved\n" {
+		t.Errorf("resolved file was modified:\n%s", data)
+	}
+}
+
+func TestFileFlagRejectsDirectories(t *testing.T) {
+	dir := t.TempDir()
+	_, err := runCmdIn(t, dir, "--file", ".", "list")
+	if err == nil || !strings.Contains(err.Error(), "not a file") {
+		t.Errorf("expected a not-a-file error, got %v", err)
+	}
+}
+
+// init creates the named file rather than demanding it already exist.
+func TestFileFlagWithInit(t *testing.T) {
+	dir := t.TempDir()
+
+	out, err := runCmdIn(t, dir, "--file", "fresh.md", "init")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "Created fresh.md") {
+		t.Errorf("expected a Created message, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "fresh.md")); err != nil {
+		t.Errorf("expected fresh.md to exist: %v", err)
+	}
+
+	if _, err := runCmdIn(t, dir, "--file", "fresh.md", "init"); err == nil {
+		t.Error("expected the second init to refuse")
 	}
 }

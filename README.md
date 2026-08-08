@@ -38,6 +38,7 @@ todo
 | Command | Description |
 |---------|-------------|
 | `todo` | Launch the TUI (default) |
+| `--file <path>` | Use this file instead of searching for one (works with every command) |
 | `todo init` | Create an empty `tasks.md` |
 | `todo add "title"` | Add a task to the Backlog |
 | `todo list` | List all tasks |
@@ -114,6 +115,23 @@ the walk runs to the filesystem root.
 If nothing is found, commands that write (`add`) create `tasks.md` in the
 current directory. `todo init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
+
+### Overriding the file
+
+`--file <path>` skips the search entirely and uses exactly the file named:
+
+```bash
+todo --file notes/plan.md          # open the TUI on that file
+todo --file notes/plan.md list
+todo --file notes/plan.md add "something"
+```
+
+There is no fallback. If the file is missing the command exits with
+`file not found: <path>` rather than reaching for another one, so a typo can
+never quietly write to the wrong file.
+
+`todo init --file <path>` is the exception: it creates that file, and refuses
+if it already exists.
 
 ## Headings
 

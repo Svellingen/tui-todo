@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,10 @@ const initTemplate = `# Todo
 ## Done
 `
 
+// storeResolver hands back the task file to operate on, along with a path
+// suitable for messages.
+type storeResolver func() (*storage.Store, string, error)
+
 // resolveStore locates the task file for the current directory, walking up the
 // directory tree, and returns a Store for it plus a path suitable for messages.
 func resolveStore() (*storage.Store, string, error) {
@@ -34,6 +39,33 @@ func resolveStore() (*storage.Store, string, error) {
 		return nil, "", err
 	}
 	return storage.NewStore(path), displayPath(path), nil
+}
+
+// resolveStoreWith honours an explicit --file, falling back to the directory
+// walk only when the flag is empty.
+//
+// An explicit file is taken literally: if it is not there, that is an error
+// rather than a reason to go looking for another one.
+func resolveStoreWith(file string) (*storage.Store, string, error) {
+	if file == "" {
+		return resolveStore()
+	}
+
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return nil, "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, "", fmt.Errorf("file not found: %s", file)
+		}
+		return nil, "", err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, "", fmt.Errorf("not a file: %s", file)
+	}
+	return storage.NewStore(abs), displayPath(abs), nil
 }
 
 // displayPath renders an absolute path relative to the current directory when
@@ -55,45 +87,64 @@ func displayPath(path string) string {
 // output is written (allows testing without capturing os.Stdout).
 // The launchTUI function is called when no subcommand is given (allows testing
 // without importing bubbletea/lipgloss).
-func newRootCmd(out io.Writer, launchTUI func() error) *cobra.Command {
+func newRootCmd(out io.Writer, launchTUI func(*storage.Store) error) *cobra.Command {
+	// Held per command tree rather than in a package variable, so tests can
+	// build independent roots.
+	var file string
+
+	resolve := func() (*storage.Store, string, error) { return resolveStoreWith(file) }
+
 	root := &cobra.Command{
 		Use:   "todo",
 		Short: "A project-local TUI task tracker",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return launchTUI()
+			store, _, err := resolve()
+			if err != nil {
+				return err
+			}
+			return launchTUI(store)
 		},
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
-	root.AddCommand(newInitCmd(out))
-	root.AddCommand(newAddCmd(out))
-	root.AddCommand(newListCmd(out))
-	root.AddCommand(newDoneCmd(out))
+	root.PersistentFlags().StringVar(&file, "file", "",
+		"use this task file instead of searching for one")
+
+	root.AddCommand(newInitCmd(out, &file))
+	root.AddCommand(newAddCmd(out, resolve))
+	root.AddCommand(newListCmd(out, resolve))
+	root.AddCommand(newDoneCmd(out, resolve))
 
 	return root
 }
 
-func newInitCmd(out io.Writer) *cobra.Command {
+// newInitCmd takes the flag by pointer rather than a resolver: init creates a
+// file, so requiring it to already exist would defeat the purpose.
+func newInitCmd(out io.Writer, file *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
 		Short: "Create an empty tasks.md in the current directory",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// init always targets the current directory rather than resolving
-			// up the tree, so it can shadow an ancestor's task file.
-			if _, err := os.Stat(storage.DefaultName); err == nil {
-				return fmt.Errorf("%s already exists", storage.DefaultName)
+			// Without --file, init targets the current directory rather than
+			// resolving up the tree, so it can shadow an ancestor's task file.
+			path := storage.DefaultName
+			if *file != "" {
+				path = *file
 			}
-			if err := os.WriteFile(storage.DefaultName, []byte(initTemplate), 0644); err != nil {
-				return fmt.Errorf("failed to create %s: %w", storage.DefaultName, err)
+			if _, err := os.Stat(path); err == nil {
+				return fmt.Errorf("%s already exists", path)
 			}
-			fmt.Fprintf(out, "Created %s\n", storage.DefaultName)
+			if err := os.WriteFile(path, []byte(initTemplate), 0644); err != nil {
+				return fmt.Errorf("failed to create %s: %w", path, err)
+			}
+			fmt.Fprintf(out, "Created %s\n", path)
 			return nil
 		},
 	}
 }
 
-func newAddCmd(out io.Writer) *cobra.Command {
+func newAddCmd(out io.Writer, resolve storeResolver) *cobra.Command {
 	return &cobra.Command{
 		Use:   "add [title]",
 		Short: "Add a task to the Backlog",
@@ -104,7 +155,7 @@ func newAddCmd(out io.Writer) *cobra.Command {
 				return fmt.Errorf("task title cannot be empty")
 			}
 
-			store, path, err := resolveStore()
+			store, path, err := resolve()
 			if err != nil {
 				return err
 			}
@@ -164,12 +215,12 @@ func newAddCmd(out io.Writer) *cobra.Command {
 	}
 }
 
-func newListCmd(out io.Writer) *cobra.Command {
+func newListCmd(out io.Writer, resolve storeResolver) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all tasks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			store, path, err := resolveStore()
+			store, path, err := resolve()
 			if err != nil {
 				return err
 			}
@@ -216,7 +267,7 @@ func newListCmd(out io.Writer) *cobra.Command {
 	}
 }
 
-func newDoneCmd(out io.Writer) *cobra.Command {
+func newDoneCmd(out io.Writer, resolve storeResolver) *cobra.Command {
 	return &cobra.Command{
 		Use:   "done [number]",
 		Short: "Mark a task as done by its number",
@@ -227,7 +278,7 @@ func newDoneCmd(out io.Writer) *cobra.Command {
 				return fmt.Errorf("invalid task number: %s", args[0])
 			}
 
-			store, path, err := resolveStore()
+			store, path, err := resolve()
 			if err != nil {
 				return err
 			}
