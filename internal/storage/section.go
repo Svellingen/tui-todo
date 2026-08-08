@@ -180,15 +180,38 @@ func (tf *TaskFile) MoveTaskToSection(taskIndex, dir int) (string, bool) {
 		return "", false
 	}
 
-	_, name := ParseHeading(strings.TrimSpace(tf.Lines[target].Raw))
+	return tf.MoveTaskUnder(taskIndex, target)
+}
+
+// MoveTaskUnder moves a task so it sits directly beneath the given heading,
+// after any blank lines padding it. It returns the heading's name and whether
+// anything moved.
+func (tf *TaskFile) MoveTaskUnder(taskIndex, headingLine int) (string, bool) {
+	if headingLine < 0 || headingLine >= len(tf.Lines) ||
+		tf.Lines[headingLine].Type != LineSection {
+		return "", false
+	}
+
+	from := -1
+	for i, l := range tf.Lines {
+		if l.Type == LineTask && l.TaskIndex == taskIndex {
+			from = i
+			break
+		}
+	}
+	if from < 0 {
+		return "", false
+	}
+
+	_, name := ParseHeading(strings.TrimSpace(tf.Lines[headingLine].Raw))
 
 	line := tf.Lines[from]
 	tf.Lines = append(tf.Lines[:from], tf.Lines[from+1:]...)
-	if target > from {
-		target-- // the removal shifted everything after it down
+	if headingLine > from {
+		headingLine-- // the removal shifted everything after it down
 	}
 
-	at := target + 1
+	at := headingLine + 1
 	for at < len(tf.Lines) &&
 		tf.Lines[at].Type == LineText &&
 		strings.TrimSpace(tf.Lines[at].Raw) == "" {

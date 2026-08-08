@@ -58,6 +58,11 @@ const (
 	KeyPrioDown   = "P"
 	KeyUndo       = "u"
 	KeyRedo       = "ctrl+r"
+
+	// Heading popups. ctrl+m cannot be used for the move variant: it is CR on
+	// the wire, indistinguishable from Enter.
+	KeyHeaderJump = "ctrl+e"
+	KeyHeaderMove = "m"
 	KeyOpen       = "o"
 
 	// Toggle the task file's path in the title bar.

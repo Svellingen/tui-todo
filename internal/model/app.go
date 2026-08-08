@@ -52,6 +52,7 @@ const (
 	// modeConfirmDeleteSection guards the one destructive action undo alone
 	// does not make obvious: removing a heading takes its whole subtree.
 	modeConfirmDeleteSection
+	modePicker
 )
 
 // undoEntry is a snapshot of the file plus where the cursor was, so undoing
@@ -106,6 +107,9 @@ type App struct {
 	// inputAnchorItem is the list item the inline editor is drawn against, or
 	// -1 when no inline edit is open.
 	inputAnchorItem int
+
+	// picker is the heading popup, live only in modePicker.
+	picker headerPicker
 }
 
 func NewApp(store *storage.Store) App {
@@ -447,6 +451,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if a.mode == modePicker {
+		switch a.picker.handleKey(msg) {
+		case pickerCancelled:
+			a.mode = modeNormal
+			return a, nil
+		case pickerChosen:
+			return a.applyPicker()
+		}
+		return a, nil
+	}
+
 	if a.mode == modeConfirmDeleteSection {
 		a.mode = modeNormal
 		a.statusMsg = ""
@@ -595,6 +610,14 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.redo()
 	case ui.KeyOpen:
 		return a.openInEditor()
+	case ui.KeyHeaderJump:
+		return a.openHeaderPicker(pickerJump)
+	case ui.KeyHeaderMove:
+		// Only meaningful on a task: a heading has nothing to move.
+		if a.list.SelectedTaskIndex() < 0 {
+			return a, nil
+		}
+		return a.openHeaderPicker(pickerMove)
 	case ui.KeyToggleFilename:
 		a.showFilename = !a.showFilename
 		return a, nil
@@ -656,19 +679,16 @@ func (a App) moveTaskToSection(dir int) (tea.Model, tea.Cmd) {
 	// Snapshot first: a move with nowhere to go should not reach the undo
 	// stack.
 	before := storage.NewWriter().Write(a.taskFile)
-	name, ok := a.taskFile.MoveTaskToSection(idx, dir)
-	if !ok {
+	if _, ok := a.taskFile.MoveTaskToSection(idx, dir); !ok {
 		return a, nil
 	}
 	a.pushUndoContent(before, "move to section")
 
-	saveCmd := a.save()
-	// Follow the task into its new home; this also rebuilds the item list.
+	cmd := a.save()
+	// Follow the task into its new home; this also rebuilds the item list, and
+	// is feedback enough without a flash.
 	a.list.SelectTask(idx)
-
-	msg, cmd := flash("Moved to: " + name)
-	a.statusMsg = msg
-	return a, tea.Batch(saveCmd, cmd)
+	return a, cmd
 }
 
 // editorFinishedMsg reports that the editor subprocess exited.
@@ -1284,10 +1304,13 @@ func (a App) View() string {
 
 	view := strings.Join(lines, "\n")
 
-	// The help sits on top of the list rather than replacing it, so you keep
-	// your bearings while reading it.
-	if a.mode == modeHelp {
+	// Overlays sit on top of the list rather than replacing it, so you keep
+	// your bearings while they are open.
+	switch {
+	case a.mode == modeHelp:
 		view = centerOverlay(view, a.renderHelpBox(), w, h)
+	case a.mode == modePicker:
+		view = centerOverlay(view, a.picker.View(), w, h)
 	}
 
 	return view
@@ -1356,4 +1379,48 @@ func (a App) renderHelpBox() string {
 		Padding(1, 3)
 
 	return style.Render(helpContent())
+}
+
+// openHeaderPicker shows the heading popup for the given action.
+func (a App) openHeaderPicker(action pickerAction) (tea.Model, tea.Cmd) {
+	entries := a.list.HeadingEntries()
+	if len(entries) == 0 {
+		msg, cmd := flash("No headings in this file")
+		a.statusMsg = msg
+		return a, cmd
+	}
+
+	a.mode = modePicker
+	a.picker = newHeaderPicker(entries, action, a.list.SelectedTaskIndex())
+	return a, nil
+}
+
+// applyPicker acts on the highlighted heading and closes the popup.
+func (a App) applyPicker() (tea.Model, tea.Cmd) {
+	entry, ok := a.picker.selected()
+	a.mode = modeNormal
+	if !ok {
+		return a, nil
+	}
+
+	if a.picker.action == pickerJump {
+		a.list.SelectItemNear(entry.itemIndex)
+		return a, nil
+	}
+
+	idx := a.picker.taskIndex
+	if idx < 0 {
+		return a, nil
+	}
+
+	before := storage.NewWriter().Write(a.taskFile)
+	if _, moved := a.taskFile.MoveTaskUnder(idx, entry.lineIndex); !moved {
+		return a, nil
+	}
+	a.pushUndoContent(before, "move to heading")
+
+	cmd := a.save()
+	// Follow the task to its new home; no flash, the cursor lands on it.
+	a.list.SelectTask(idx)
+	return a, cmd
 }

@@ -21,6 +21,10 @@ var (
 	ColorFaintGray = lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#4B5563"}
 	ColorBorder    = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#7C3AED"}
 	ColorWhite     = lipgloss.AdaptiveColor{Light: "#111827", Dark: "#F9FAFB"}
+
+	// Popup palette, sampled from the reference picker.
+	ColorPickerAccent = lipgloss.AdaptiveColor{Light: "#1E7C90", Dark: "#2AA0B8"}
+	ColorPickerSel    = lipgloss.AdaptiveColor{Light: "#C7D2FE", Dark: "#2B3658"}
 )
 
 // UI element styles.

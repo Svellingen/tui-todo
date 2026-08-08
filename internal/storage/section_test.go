@@ -408,3 +408,76 @@ func TestInsertTaskUnderRejectsNonHeadings(t *testing.T) {
 		t.Error("expected insert under a task line to be rejected")
 	}
 }
+
+// MoveTaskUnder relocates a task to a heading chosen directly, rather than by
+// stepping to an adjacent one.
+func TestMoveTaskUnderNamedHeading(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	_, idx := taskLine(t, tf, "alpha one")
+
+	name, ok := tf.MoveTaskUnder(idx, headingLine(t, tf, "Beta"))
+	if !ok {
+		t.Fatal("expected the move to succeed")
+	}
+	if name != "Beta" {
+		t.Errorf("expected the target name, got %q", name)
+	}
+
+	want := "## Beta\n- [ ] alpha one\n- [ ] beta task\n"
+	if got := NewWriter().Write(tf); !strings.Contains(got, want) {
+		t.Errorf("expected output to contain:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+// Moving backwards in the file works too, and every task keeps a line.
+func TestMoveTaskUnderEarlierHeading(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	total := len(tf.Tasks)
+	_, idx := taskLine(t, tf, "beta task")
+
+	if _, ok := tf.MoveTaskUnder(idx, headingLine(t, tf, "Top")); !ok {
+		t.Fatal("expected the move to succeed")
+	}
+
+	want := "# Top\n- [ ] beta task\n- [ ] top task\n"
+	if got := NewWriter().Write(tf); !strings.Contains(got, want) {
+		t.Errorf("expected output to contain:\n%s\ngot:\n%s", want, got)
+	}
+
+	seen := 0
+	for _, l := range tf.Lines {
+		if l.Type == LineTask {
+			if l.TaskIndex < 0 || l.TaskIndex >= len(tf.Tasks) {
+				t.Fatalf("dangling task index %d", l.TaskIndex)
+			}
+			seen++
+		}
+	}
+	if seen != total {
+		t.Errorf("expected %d task lines, got %d", total, seen)
+	}
+}
+
+func TestMoveTaskUnderRejectsNonHeadings(t *testing.T) {
+	tf, err := NewParser().Parse(nested)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	_, idx := taskLine(t, tf, "alpha one")
+
+	if _, ok := tf.MoveTaskUnder(idx, 1); ok {
+		t.Error("expected a task line to be rejected as a target")
+	}
+	if _, ok := tf.MoveTaskUnder(idx, 999); ok {
+		t.Error("expected an out-of-range target to be rejected")
+	}
+	if _, ok := tf.MoveTaskUnder(999, headingLine(t, tf, "Beta")); ok {
+		t.Error("expected an unknown task to be rejected")
+	}
+}

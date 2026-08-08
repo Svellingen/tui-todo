@@ -55,6 +55,8 @@ todo
 | `tab` / `shift+tab` | Select the next / previous heading, any level |
 | `ctrl+j` / `ctrl+k` | Select the next / previous `##` heading, skipping deeper ones |
 | `ctrl+h` / `ctrl+l` | Select the parent / first child heading |
+| `ctrl+e` | Heading popup — filter and jump to any heading |
+| `m` | Heading popup — move the selected task to any heading |
 | `J` / `K` | Same jump, vim-style |
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
@@ -197,6 +199,34 @@ leaving the task as it was.
 
 Search (`/`) and the tag prompt (`t`) still appear below the list, since
 neither belongs to a particular row.
+
+## The Heading Popup
+
+In a file with many headings, `ctrl+e` opens a filterable list of them all:
+
+```
+╭──────────────────── Jump to heading ─────────────────────╮
+│ > filter…                                            8/8 │
+│ ──────────────────────────────────────────────────────── │
+│ repo / github / svellingen / tui-todo                    │
+│ ├─ shamone                                               │
+│ ├─ tasks                                                 │
+│ ├─ test header 4                                         │
+│ ├─ test header 5                                         │
+│ │  ╰─ sub header 55                                      │
+│ │     ╰─ sub header 555                                  │
+│ ╰─ test header 6                                         │
+╰──────────────────────────────────────────────────────────╯
+```
+
+Type to filter by name, `ctrl+j` / `ctrl+k` (or the arrows) to move, `Enter` to
+jump there, `Esc` to close. The tree guides are drawn over whatever is
+currently visible, so a filtered list still reads as a tree rather than
+sprouting branches to hidden parents.
+
+`m` opens the same popup in move mode: choosing a heading moves the selected
+task under it, and the cursor follows the task to its new home. It only applies
+to tasks — pressing it on a heading does nothing.
 
 ## Sorting
 

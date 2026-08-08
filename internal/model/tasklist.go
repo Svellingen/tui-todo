@@ -921,3 +921,24 @@ func statusIcon(s task.Status) string {
 // SetHideCursor suppresses the row cursor, used while an inline editor holds
 // focus so there is only one caret on screen.
 func (m *TaskListModel) SetHideCursor(hide bool) { m.hideCursor = hide }
+
+// HeadingEntries lists every heading currently in the list, for the picker.
+func (m TaskListModel) HeadingEntries() []headerEntry {
+	var out []headerEntry
+	for i, it := range m.items {
+		if it.kind != itemSection {
+			continue
+		}
+		level, name := storage.ParseHeading(strings.TrimSpace(it.section))
+		if level == 0 {
+			level, name = 1, strings.TrimSpace(it.section)
+		}
+		out = append(out, headerEntry{
+			itemIndex: i,
+			lineIndex: it.lineIndex,
+			level:     level,
+			name:      name,
+		})
+	}
+	return out
+}
