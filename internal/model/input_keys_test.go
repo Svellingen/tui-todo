@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 // newInputApp returns an app sitting in the add prompt.

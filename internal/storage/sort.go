@@ -3,7 +3,7 @@ package storage
 import (
 	"slices"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 // sortRank orders tasks within a section: done first, then high priority,

@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/macone/todo-cli/internal/ui"
+	"github.com/svellingen/md-taco/internal/ui"
 )
 
 // helpContent returns styled help text for the overlay.

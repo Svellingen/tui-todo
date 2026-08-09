@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/macone/todo-cli/internal/storage"
-	"github.com/macone/todo-cli/internal/task"
 	"github.com/spf13/cobra"
+	"github.com/svellingen/md-taco/internal/storage"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 const initTemplate = `# Todo
@@ -95,7 +95,7 @@ func newRootCmd(out io.Writer, launchTUI func(*storage.Store) error) *cobra.Comm
 	resolve := func() (*storage.Store, string, error) { return resolveStoreWith(file) }
 
 	root := &cobra.Command{
-		Use:   "todo",
+		Use:   "taco",
 		Short: "A project-local TUI task tracker",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, _, err := resolve()

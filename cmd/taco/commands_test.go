@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 // helper to run a command in a temp directory with an optional existing tasks.md

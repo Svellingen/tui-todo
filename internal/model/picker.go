@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/macone/todo-cli/internal/ui"
+	"github.com/svellingen/md-taco/internal/ui"
 )
 
 // pickerRows is how many headings the popup shows before it scrolls.

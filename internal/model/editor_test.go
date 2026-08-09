@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/macone/todo-cli/internal/storage"
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/storage"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 func TestEditorInvocationAddsLineForKnownEditors(t *testing.T) {

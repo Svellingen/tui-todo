@@ -3,7 +3,7 @@ package storage
 import (
 	"strings"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 // lineLevel returns the heading level of a line, or 0 when it is not a heading.

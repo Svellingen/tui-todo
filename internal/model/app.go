@@ -12,9 +12,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/macone/todo-cli/internal/storage"
-	"github.com/macone/todo-cli/internal/task"
-	"github.com/macone/todo-cli/internal/ui"
+	"github.com/svellingen/md-taco/internal/storage"
+	"github.com/svellingen/md-taco/internal/task"
+	"github.com/svellingen/md-taco/internal/ui"
 )
 
 const maxUndoStack = 20
@@ -1704,7 +1704,7 @@ func (a App) View() string {
 		filterPart = "  " + ui.FilterBadge.Render(fi)
 	}
 
-	label := "todo"
+	label := "taco"
 	if a.showFilename {
 		// The path gets whatever the progress bar, the filter badge, the "✦ "
 		// prefix and a two-cell gap leave behind.

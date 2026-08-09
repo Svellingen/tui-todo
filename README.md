@@ -1,4 +1,4 @@
-# todo-cli
+# md-taco
 
 A zero-config, project-local TUI task tracker that stores tasks in a markdown file.
 
@@ -7,42 +7,42 @@ A zero-config, project-local TUI task tracker that stores tasks in a markdown fi
 ## Install
 
 ```bash
-go install github.com/macone/todo-cli/cmd/todo@latest
+go install github.com/svellingen/md-taco/cmd/taco@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/macone/todo-cli.git
-cd todo-cli
+git clone https://github.com/svellingen/md-taco.git
+cd md-taco
 just build
-# Binary at ./bin/todo
+# Binary at ./bin/taco
 ```
 
 ## Quick Start
 
 ```bash
 # Create a tasks.md in your project
-todo init
+taco init
 
 # Add tasks
-todo add "Set up CI pipeline"
-todo add "Write tests"
+taco add "Set up CI pipeline"
+taco add "Write tests"
 
 # Launch the TUI
-todo
+taco
 ```
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `todo` | Launch the TUI (default) |
+| `taco` | Launch the TUI (default) |
 | `--file <path>` | Use this file instead of searching for one (works with every command) |
-| `todo init` | Create an empty `tasks.md` |
-| `todo add "title"` | Add a task to the Backlog |
-| `todo list` | List all tasks |
-| `todo done <n>` | Mark task #n as done |
+| `taco init` | Create an empty `tasks.md` |
+| `taco add "title"` | Add a task to the Backlog |
+| `taco list` | List all tasks |
+| `taco done <n>` | Mark task #n as done |
 
 ## TUI Keybindings
 
@@ -115,7 +115,7 @@ upwards, stopping at the first match:
 
 `tasks.md` only wins over `index.md` within the *same* directory — an `index.md`
 next to you takes precedence over a `tasks.md` further up the tree. This means
-you can run `todo` from anywhere inside a project and hit the same file.
+you can run `taco` from anywhere inside a project and hit the same file.
 
 The walk stops after checking `$HOME`, so a stray `tasks.md` or `index.md`
 above your home directory can't leak into unrelated projects. `$HOME` itself
@@ -124,7 +124,7 @@ any project. Directories outside `$HOME` never cross that boundary, so there
 the walk runs to the filesystem root.
 
 If nothing is found, commands that write (`add`) create `tasks.md` in the
-current directory. `todo init` always creates `tasks.md` in the current
+current directory. `taco init` always creates `tasks.md` in the current
 directory, which is how you shadow an ancestor's task file for a subproject.
 
 ### Overriding the file
@@ -132,16 +132,16 @@ directory, which is how you shadow an ancestor's task file for a subproject.
 `--file <path>` skips the search entirely and uses exactly the file named:
 
 ```bash
-todo --file notes/plan.md          # open the TUI on that file
-todo --file notes/plan.md list
-todo --file notes/plan.md add "something"
+taco --file notes/plan.md          # open the TUI on that file
+taco --file notes/plan.md list
+taco --file notes/plan.md add "something"
 ```
 
 There is no fallback. If the file is missing the command exits with
 `file not found: <path>` rather than reaching for another one, so a typo can
 never quietly write to the wrong file.
 
-`todo init --file <path>` is the exception: it creates that file, and refuses
+`taco init --file <path>` is the exception: it creates that file, and refuses
 if it already exists.
 
 ## Headings
@@ -221,7 +221,7 @@ In a file with many headings, `ctrl+e` opens a filterable list of them all:
 ╭──────────────────── Jump to heading ─────────────────────╮
 │ > filter…                                            8/8 │
 │ ──────────────────────────────────────────────────────── │
-│ repo / github / svellingen / tui-todo                    │
+│ repo / github / svellingen / md-taco                      │
 │ ├─ shamone                                               │
 │ ├─ tasks                                                 │
 │ ├─ test header 4                                         │
@@ -248,7 +248,7 @@ selected task lives under. Its sub-headings and their tasks come along, so
 focusing a `##` shows the whole branch beneath it.
 
 ```
-✦ todo  [focus: Alpha]
+✦ taco  [focus: Alpha]
  - Alpha
    ○   alpha one
    ○   alpha two

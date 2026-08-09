@@ -1,4 +1,4 @@
-module github.com/macone/todo-cli
+module github.com/svellingen/md-taco
 
 go 1.25.7
 

@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 const inlineFixture = "## Alpha\n" +

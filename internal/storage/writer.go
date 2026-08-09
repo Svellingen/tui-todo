@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 // Writer serializes a TaskFile back to markdown format.

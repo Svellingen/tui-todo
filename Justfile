@@ -9,11 +9,11 @@ default:
 
 # Build binary into bin/
 build:
-    go build -o bin/todo ./cmd/todo
+    go build -o bin/taco ./cmd/taco
 
 # Build and run
 run: build
-    ./bin/todo
+    ./bin/taco
 
 # Run all tests
 test:
@@ -38,6 +38,6 @@ release: clean
         ext=""
         if [ "$os" = "windows" ]; then ext=".exe"; fi
         echo "Building $os/$arch..."
-        GOOS="$os" GOARCH="$arch" go build -o "dist/todo-$os-$arch$ext" ./cmd/todo
+        GOOS="$os" GOARCH="$arch" go build -o "dist/taco-$os-$arch$ext" ./cmd/taco
     done
     echo "Release binaries in dist/"

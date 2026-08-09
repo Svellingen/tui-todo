@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 // LineType identifies the kind of line in the markdown file.

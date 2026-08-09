@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/macone/todo-cli/internal/model"
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/model"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 func main() {

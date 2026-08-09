@@ -1,4 +1,4 @@
-# todo-cli
+# md-taco
 
 A project-local TUI task tracker (Go, bubbletea) that keeps its state in a
 markdown file. `README.md` documents every keybinding and behaviour — read it
@@ -46,8 +46,8 @@ this repo gets driven for real in tmux against a scratch `tasks.md`:
 
 ```bash
 just build && T=$(mktemp -d) && printf '## Alpha\n- [ ] a task\n' > $T/tasks.md
-tmux new-session -d -s todo -x 80 -y 20 -c "$T" "$PWD/bin/todo"
-tmux send-keys -t todo j; sleep 0.5; tmux capture-pane -t todo -p
+tmux new-session -d -s taco -x 80 -y 20 -c "$T" "$PWD/bin/taco"
+tmux send-keys -t taco j; sleep 0.5; tmux capture-pane -t taco -p
 ```
 
 Use `capture-pane -e` when colour matters. Sleep after `send-keys` — the app
@@ -76,8 +76,6 @@ screen.
 - `internal/config` reads `.todo.toml` and `~/.config/todo/config.toml`, but
   **nothing imports it**. Configuration does not work. Wire it up or delete it;
   don't document it as working.
-- The module is `github.com/macone/todo-cli` while the repo is
-  `svellingen/tui-todo`, so the `go install` line in the README can't work.
 - `docs/plans/2026-02-06-todo-cli.md` is the **original plan and is stale** —
   it says `todo.md`, `Makefile`, and bubbletea v2, all of which are wrong now.
   Don't treat it as a description of the current code.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 func TestLoadMissingFile(t *testing.T) {

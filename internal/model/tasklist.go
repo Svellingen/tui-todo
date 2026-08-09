@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/macone/todo-cli/internal/storage"
-	"github.com/macone/todo-cli/internal/task"
-	"github.com/macone/todo-cli/internal/ui"
+	"github.com/svellingen/md-taco/internal/storage"
+	"github.com/svellingen/md-taco/internal/task"
+	"github.com/svellingen/md-taco/internal/ui"
 )
 
 type itemType int

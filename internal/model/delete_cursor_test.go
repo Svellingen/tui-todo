@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 // newDeleteApp returns an app over content, backed by a real file so saves

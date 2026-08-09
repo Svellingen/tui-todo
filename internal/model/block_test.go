@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/macone/todo-cli/internal/storage"
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/storage"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 const blockAppFixture = "## Alpha\n" +

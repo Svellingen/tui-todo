@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/macone/todo-cli/internal/task"
+	"github.com/svellingen/md-taco/internal/task"
 )
 
 const stateFixture = "## Alpha\n" +

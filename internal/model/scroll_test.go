@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/macone/todo-cli/internal/storage"
+	"github.com/svellingen/md-taco/internal/storage"
 )
 
 // newScrollList builds a list model over content, with a viewport of height
