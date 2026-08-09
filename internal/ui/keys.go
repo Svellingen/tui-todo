@@ -71,6 +71,7 @@ const (
 	KeyFilterAll    = "1"
 	KeyFilterActive = "2"
 	KeyFilterDone   = "3"
+	KeyFocus        = "f"
 	KeySearch       = "/"
 	KeyTag          = "t"
 	KeyFilterTag    = "T"

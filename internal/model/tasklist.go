@@ -47,6 +47,12 @@ type TaskListModel struct {
 	tagFilter    string
 	// hideCursor suppresses the row marker while an inline editor is open.
 	hideCursor bool
+
+	// focusActive narrows the list to one heading's subtree; focusLine is that
+	// heading's index in TaskFile.Lines. A bool rather than a sentinel so the
+	// zero value means "not focused".
+	focusActive bool
+	focusLine   int
 }
 
 func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
@@ -56,8 +62,11 @@ func NewTaskListModel(tf *storage.TaskFile) TaskListModel {
 }
 
 func (m *TaskListModel) rebuildItems() {
+	start, end := m.focusRange()
+
 	m.items = nil
-	for li, line := range m.taskFile.Lines {
+	for li := start; li < end; li++ {
+		line := m.taskFile.Lines[li]
 		switch line.Type {
 		case storage.LineSection:
 			m.items = append(m.items, item{kind: itemSection, section: line.Raw, lineIndex: li})
@@ -626,6 +635,9 @@ func (m TaskListModel) isLastTask() bool {
 // FilterIndicator returns a string showing active filters.
 func (m TaskListModel) FilterIndicator() string {
 	var parts []string
+	if name := m.FocusName(); name != "" {
+		parts = append(parts, "focus: "+name)
+	}
 	switch m.statusFilter {
 	case filterActive:
 		parts = append(parts, "active")
@@ -941,4 +953,115 @@ func (m TaskListModel) HeadingEntries() []headerEntry {
 		})
 	}
 	return out
+}
+
+// focusRange returns the slice of Lines the list should draw from: the whole
+// file, or one heading's subtree while focused.
+//
+// The focus lapses on its own if the heading it points at is gone -- deleted,
+// or shifted by an outside edit -- rather than showing an arbitrary slice.
+func (m *TaskListModel) focusRange() (start, end int) {
+	if !m.focusActive {
+		return 0, len(m.taskFile.Lines)
+	}
+	span, ok := m.taskFile.Span(m.focusLine)
+	if !ok {
+		m.focusActive = false
+		return 0, len(m.taskFile.Lines)
+	}
+	return span.Start, span.End
+}
+
+// FocusHeading narrows the list to the heading the cursor is under, or the one
+// it is on. It reports whether a heading was found to focus.
+func (m *TaskListModel) FocusHeading() bool {
+	line := -1
+	if m.cursor >= 0 && m.cursor < len(m.items) {
+		if m.items[m.cursor].kind == itemSection {
+			line = m.items[m.cursor].lineIndex
+		} else {
+			// On a task: focus the heading it lives under.
+			for i := m.cursor - 1; i >= 0; i-- {
+				if m.items[i].kind == itemSection {
+					line = m.items[i].lineIndex
+					break
+				}
+			}
+		}
+	}
+	if line < 0 {
+		return false
+	}
+
+	anchor := m.captureCursor()
+	m.focusActive = true
+	m.focusLine = line
+	m.rebuildItems()
+	m.restoreCursor(anchor)
+	return true
+}
+
+// ClearFocus widens the list back to the whole file, keeping the cursor on the
+// task it was on.
+func (m *TaskListModel) ClearFocus() {
+	if !m.focusActive {
+		return
+	}
+	anchor := m.captureCursor()
+	m.focusActive = false
+	m.rebuildItems()
+	m.restoreCursor(anchor)
+}
+
+// Focused reports whether the list is narrowed to one heading.
+func (m TaskListModel) Focused() bool { return m.focusActive }
+
+// FocusName is the name of the heading currently focused.
+func (m TaskListModel) FocusName() string {
+	if !m.focusActive || m.focusLine < 0 || m.focusLine >= len(m.taskFile.Lines) {
+		return ""
+	}
+	_, name := storage.ParseHeading(strings.TrimSpace(m.taskFile.Lines[m.focusLine].Raw))
+	return name
+}
+
+// cursorAnchor remembers what the cursor sits on so it can be found again
+// after the item list is rebuilt. Headings are tracked by line, tasks by task
+// index, since neither survives as a plain item position.
+type cursorAnchor struct {
+	valid     bool
+	isSection bool
+	lineIndex int
+	taskIndex int
+}
+
+func (m TaskListModel) captureCursor() cursorAnchor {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return cursorAnchor{}
+	}
+	it := m.items[m.cursor]
+	return cursorAnchor{
+		valid:     it.kind != itemBlank,
+		isSection: it.kind == itemSection,
+		lineIndex: it.lineIndex,
+		taskIndex: it.taskIndex,
+	}
+}
+
+func (m *TaskListModel) restoreCursor(a cursorAnchor) {
+	if !a.valid {
+		return
+	}
+	for i, it := range m.items {
+		if a.isSection && it.kind == itemSection && it.lineIndex == a.lineIndex {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+		if !a.isSection && it.kind == itemTask && it.taskIndex == a.taskIndex {
+			m.cursor = i
+			m.adjustScroll()
+			return
+		}
+	}
 }

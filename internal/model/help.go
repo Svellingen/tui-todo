@@ -48,6 +48,7 @@ func helpContent() string {
 			{"1", "Show all"},
 			{"2", "Active only"},
 			{"3", "Done only"},
+			{"f", "Focus current heading"},
 		}},
 		{"General", []ui.HelpItem{
 			{"i", "Toggle the file path in the title"},

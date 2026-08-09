@@ -87,6 +87,7 @@ todo
 | `1` | Show all tasks |
 | `2` | Show active only (todo + in-progress) |
 | `3` | Show done only |
+| `f` | Focus the current heading — show only its tasks (toggle) |
 
 ### General
 
@@ -227,6 +228,35 @@ sprouting branches to hidden parents.
 `m` opens the same popup in move mode: choosing a heading moves the selected
 task under it, and the cursor follows the task to its new home. It only applies
 to tasks — pressing it on a heading does nothing.
+
+## Focus View
+
+`f` narrows the list to one heading: the one the cursor is on, or the one the
+selected task lives under. Its sub-headings and their tasks come along, so
+focusing a `##` shows the whole branch beneath it.
+
+```
+✦ todo  [focus: Alpha]
+   Alpha
+   ○  alpha one
+ ▸ ○  alpha two
+   Alpha sub
+   ○  sub task
+```
+
+Press `f` again to widen back out. The cursor is kept across both, whether it
+is on a task or on the heading itself.
+
+Focus composes with the status filters, so `f` then `2` shows just the active
+tasks in that branch. It is a scope rather than a filter, so `1` does not clear
+it — `f` does.
+
+If the focused heading disappears — deleted, or gone after an outside edit —
+the focus lapses and the whole file comes back, rather than leaving the list
+showing an arbitrary slice.
+
+While focused, the `ctrl+e` popup lists only the headings inside the focus.
+Widen with `f` to jump elsewhere.
 
 ## Sorting
 

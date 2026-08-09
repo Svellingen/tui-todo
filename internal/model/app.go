@@ -627,6 +627,8 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.list.SetStatusFilter(filterActive)
 	case ui.KeyFilterDone:
 		a.list.SetStatusFilter(filterDone)
+	case ui.KeyFocus:
+		return a.toggleFocus()
 	case ui.KeySearch:
 		a.mode = modeInput
 		a.input.StartSearch()
@@ -1423,4 +1425,20 @@ func (a App) applyPicker() (tea.Model, tea.Cmd) {
 	// Follow the task to its new home; no flash, the cursor lands on it.
 	a.list.SelectTask(idx)
 	return a, cmd
+}
+
+// toggleFocus narrows the list to the heading the cursor is in, or widens it
+// again when already focused.
+func (a App) toggleFocus() (tea.Model, tea.Cmd) {
+	if a.list.Focused() {
+		a.list.ClearFocus()
+		return a, nil
+	}
+
+	if !a.list.FocusHeading() {
+		msg, cmd := flash("No heading to focus")
+		a.statusMsg = msg
+		return a, cmd
+	}
+	return a, nil
 }
