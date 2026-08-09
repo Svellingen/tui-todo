@@ -135,7 +135,22 @@ type App struct {
 
 	// picker is the heading popup, live only in modePicker.
 	picker headerPicker
+
+	// inputBlock points an in-flight add or edit at a task's block instead of
+	// a top-level task.
+	inputBlock blockTarget
 }
+
+// blockTarget locates a line inside a task's block. A negative parent means
+// the input concerns a top-level task rather than a block.
+type blockTarget struct {
+	parent int
+	index  int
+}
+
+func noBlockTarget() blockTarget { return blockTarget{parent: -1, index: -1} }
+
+func (b blockTarget) active() bool { return b.parent >= 0 }
 
 func NewApp(store *storage.Store) App {
 	return App{
@@ -143,6 +158,7 @@ func NewApp(store *storage.Store) App {
 		input:           NewTaskInput(),
 		addAnchorLine:   -1,
 		inputAnchorItem: -1,
+		inputBlock:      noBlockTarget(),
 	}
 }
 
@@ -460,6 +476,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// input mode can forget to clear it.
 		if updated.mode != modeInput {
 			updated.inputAnchorItem = -1
+			updated.inputBlock = noBlockTarget()
 			updated.list.SetHideCursor(false)
 		}
 		// A change seen while a modal was open applies as soon as it closes.
@@ -627,7 +644,15 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyDone:
 		return a.toggleDone()
 	case ui.KeyAdd:
+		if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+			return a.startAddSubtask(parent, index+1)
+		}
 		return a.startAdd()
+	case ui.KeyAddSubtask:
+		if idx := a.list.SelectedTaskIndex(); idx >= 0 {
+			return a.startAddSubtask(idx, len(a.taskFile.Tasks[idx].Block))
+		}
+		return a, nil
 	case ui.KeyEdit:
 		return a.startEdit()
 	case ui.KeyDelete:
@@ -829,7 +854,65 @@ func (a App) startAdd() (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// startAddSubtask opens the editor for a new line in a task's block, at the
+// given position. The block is unfolded first, since the editor is drawn in
+// it.
+func (a App) startAddSubtask(parent, at int) (tea.Model, tea.Cmd) {
+	if parent < 0 || parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	a.list.ExpandTask(parent)
+
+	// Anchor on the row the new line follows: the block line before it, or the
+	// task itself when the block is empty or we are adding at its head.
+	anchor := a.list.ItemForTask(parent)
+	if at > 0 {
+		if i := a.list.ItemForBlockLine(parent, at-1); i >= 0 {
+			anchor = i
+		}
+	}
+	if anchor < 0 {
+		return a, nil
+	}
+
+	a.mode = modeInput
+	a.inputBlock = blockTarget{parent: parent, index: at}
+	a.inputAnchorItem = anchor
+	a.list.SetHideCursor(true)
+	a.input.StartAdd()
+	a.updateListSize()
+	return a, nil
+}
+
+// startEditBlockLine opens the editor over a line of a task's block.
+func (a App) startEditBlockLine(parent, index int) (tea.Model, tea.Cmd) {
+	if parent < 0 || parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	block := a.taskFile.Tasks[parent].Block
+	if index < 0 || index >= len(block) {
+		return a, nil
+	}
+
+	current := block[index].Note
+	if sub := block[index].Subtask; sub != nil {
+		current = sub.Title
+	}
+
+	a.mode = modeInput
+	a.inputBlock = blockTarget{parent: parent, index: index}
+	a.inputAnchorItem = a.list.Cursor()
+	a.list.SetHideCursor(true)
+	a.input.StartEdit(parent, current)
+	a.updateListSize()
+	return a, nil
+}
+
 func (a App) startEdit() (tea.Model, tea.Cmd) {
+	if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+		return a.startEditBlockLine(parent, index)
+	}
+
 	idx := a.list.SelectedTaskIndex()
 	if idx < 0 {
 		return a, nil
@@ -856,6 +939,9 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 
 	switch a.input.Mode() {
 	case inputAdd:
+		if a.inputBlock.active() {
+			return a.commitBlockAdd(value)
+		}
 		idx := a.addTask(value)
 		a.addAnchorLine = -1
 		a.input.Cancel()
@@ -869,6 +955,9 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		return a, saveCmd
 
 	case inputEdit:
+		if a.inputBlock.active() {
+			return a.commitBlockEdit(value)
+		}
 		idx := a.input.EditIndex()
 		if idx >= 0 && idx < len(a.taskFile.Tasks) {
 			meta := storage.ParseMetadata(value)
@@ -922,6 +1011,99 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 	a.mode = modeNormal
 	a.updateListSize()
 	return a, nil
+}
+
+// commitBlockAdd inserts a new subtask into its task's block.
+//
+// The typed text is read the same way a task title is, so priority, tags and
+// contexts can be given inline. A full "- [x] ..." line is honoured too, which
+// is how a subtask can be added already done.
+func (a App) commitBlockAdd(value string) (tea.Model, tea.Cmd) {
+	target := a.inputBlock
+	a.inputBlock = noBlockTarget()
+	a.input.Cancel()
+	a.mode = modeNormal
+	a.updateListSize()
+
+	if target.parent < 0 || target.parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	a.pushUndo("add subtask")
+
+	sub, ok := storage.ParseTaskText(value)
+	if !ok {
+		meta := storage.ParseMetadata(value)
+		sub = task.Task{
+			Title:    meta.Title,
+			Status:   task.StatusTodo,
+			Priority: meta.Priority,
+			Tags:     meta.Tags,
+			Contexts: meta.Contexts,
+			DueDate:  meta.DueDate,
+		}
+	}
+
+	block := a.taskFile.Tasks[target.parent].Block
+	at := min(max(target.index, 0), len(block))
+	block = append(block[:at], append([]task.BlockLine{{Subtask: &sub}}, block[at:]...)...)
+	a.taskFile.Tasks[target.parent].Block = block
+
+	cmd := a.save()
+	a.list.SelectBlockLine(target.parent, at)
+	return a, cmd
+}
+
+// commitBlockEdit writes the edited text back over its block line.
+//
+// A subtask keeps its status and any metadata the new text does not mention,
+// exactly as editing a top-level task does. A note that is retyped as a
+// checkbox item becomes a subtask.
+func (a App) commitBlockEdit(value string) (tea.Model, tea.Cmd) {
+	target := a.inputBlock
+	a.inputBlock = noBlockTarget()
+	a.input.Cancel()
+	a.mode = modeNormal
+	a.updateListSize()
+
+	if target.parent < 0 || target.parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	block := a.taskFile.Tasks[target.parent].Block
+	if target.index < 0 || target.index >= len(block) {
+		return a, nil
+	}
+	a.pushUndo("edit subtask")
+
+	switch existing := block[target.index].Subtask; {
+	case existing != nil:
+		meta := storage.ParseMetadata(value)
+		sub := *existing
+		sub.Title = meta.Title
+		if meta.Priority != task.PriorityNone {
+			sub.Priority = meta.Priority
+		}
+		if len(meta.Tags) > 0 {
+			sub.Tags = meta.Tags
+		}
+		if len(meta.Contexts) > 0 {
+			sub.Contexts = meta.Contexts
+		}
+		if meta.DueDate != nil {
+			sub.DueDate = meta.DueDate
+		}
+		block[target.index] = task.BlockLine{Subtask: &sub}
+
+	default:
+		if sub, ok := storage.ParseTaskText(value); ok {
+			block[target.index] = task.BlockLine{Subtask: &sub}
+		} else {
+			block[target.index] = task.BlockLine{Note: value}
+		}
+	}
+
+	cmd := a.save()
+	a.list.SelectBlockLine(target.parent, target.index)
+	return a, cmd
 }
 
 // addTask inserts a task and returns its index in TaskFile.Tasks.
@@ -1429,6 +1611,22 @@ func (a App) inlineInputActive() bool {
 // renderInlineInput draws the editor to look like the row it stands in for.
 func (a App) renderInlineInput() string {
 	status := task.StatusTodo
+
+	// A block editor is drawn at the block's indentation, so the row it stands
+	// in for keeps its place.
+	if a.inputBlock.active() {
+		if a.input.Mode() == inputEdit {
+			block := a.taskFile.Tasks[a.inputBlock.parent].Block
+			if a.inputBlock.index < len(block) {
+				if sub := block[a.inputBlock.index].Subtask; sub != nil {
+					status = sub.Status
+				}
+			}
+		}
+		return "  " + ui.CursorStyle.Render(" - ") + "  " +
+			statusIcon(status) + "  " + a.input.View()
+	}
+
 	if a.input.Mode() == inputEdit {
 		if idx := a.input.EditIndex(); idx >= 0 && idx < len(a.taskFile.Tasks) {
 			status = a.taskFile.Tasks[idx].Status
@@ -1457,12 +1655,25 @@ func (a App) spliceInlineInput(lines []string, starts []int) ([]string, int) {
 		return lines, at
 	}
 
-	// Adding: insert after the anchor's block, which is where the next item
-	// starts. A heading's block includes its leading blank line, so this lands
-	// directly beneath the heading text.
+	// Adding: the editor goes after the anchor's block, which is where the next
+	// item starts. A heading's block includes its leading blank line, so this
+	// lands directly beneath the heading text.
+	//
+	// A task's expanded block sits between it and the row the new task will
+	// actually occupy, so step past those rows -- otherwise the editor appears
+	// inside the block it is not going into.
+	last := anchor
+	if items := a.list.items; anchor < len(items) && items[anchor].kind == itemTask {
+		for last+1 < len(items) &&
+			items[last+1].kind == itemBlockLine &&
+			items[last+1].taskIndex == items[anchor].taskIndex {
+			last++
+		}
+	}
+
 	at := len(lines)
-	if anchor+1 < len(starts) {
-		at = starts[anchor+1]
+	if last+1 < len(starts) {
+		at = starts[last+1]
 	}
 	if at > len(lines) {
 		at = len(lines)

@@ -46,9 +46,10 @@ const (
 	KeyDone = "d"
 	// Enter also starts an add; it is matched by key type in the handler
 	// rather than by name, so it has no constant here.
-	KeyAdd    = "a"
-	KeyEdit   = "e"
-	KeyDelete = "x"
+	KeyAdd        = "a"
+	KeyAddSubtask = "A"
+	KeyEdit       = "e"
+	KeyDelete     = "x"
 	// KeyStatus is the space bar; bubbletea reports it as a single space.
 	KeyStatus = " "
 	// KeyStatusPrev is ctrl+space, which is NUL on the wire -- bubbletea names

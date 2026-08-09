@@ -1326,3 +1326,50 @@ func (m *TaskListModel) ToggleExpandAll() bool {
 	}
 	return true
 }
+
+// ExpandTask unfolds a task's block, leaving an already-open one alone.
+func (m *TaskListModel) ExpandTask(idx int) {
+	if idx < 0 || idx >= len(m.taskFile.Tasks) {
+		return
+	}
+	if m.expanded[idx] {
+		return
+	}
+	if m.expanded == nil {
+		m.expanded = make(map[int]bool)
+	}
+	m.expanded[idx] = true
+
+	anchor := m.captureCursor()
+	m.rebuildItems()
+	m.restoreCursor(anchor)
+}
+
+// ItemForTask returns the item index of a top-level task, or -1.
+func (m TaskListModel) ItemForTask(taskIndex int) int {
+	for i, it := range m.items {
+		if it.kind == itemTask && it.taskIndex == taskIndex {
+			return i
+		}
+	}
+	return -1
+}
+
+// ItemForBlockLine returns the item index of one line of a task's block, or -1.
+func (m TaskListModel) ItemForBlockLine(taskIndex, blockIndex int) int {
+	for i, it := range m.items {
+		if it.kind == itemBlockLine && it.taskIndex == taskIndex && it.blockIndex == blockIndex {
+			return i
+		}
+	}
+	return -1
+}
+
+// SelectBlockLine puts the cursor on a block line, unfolding nothing.
+func (m *TaskListModel) SelectBlockLine(taskIndex, blockIndex int) {
+	m.rebuildItems()
+	if i := m.ItemForBlockLine(taskIndex, blockIndex); i >= 0 {
+		m.cursor = i
+		m.adjustScroll()
+	}
+}

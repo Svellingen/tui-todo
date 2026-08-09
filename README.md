@@ -68,8 +68,9 @@ todo
 
 | Key | Action |
 |-----|--------|
-| `a` | Add a task inline on the next row — below the current task, or under the current heading |
-| `e` | Edit the task title inline, on its own row |
+| `a` | Add a task inline below the selection — or a sibling subtask when on a block line |
+| `A` | Add a subtask to the selected task |
+| `e` | Edit the task, subtask or note inline, on its own row |
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
 | `Space` | Cycle status forward (todo → in-progress → done, wrapping) |
@@ -318,6 +319,18 @@ for the things that act in place: `Space`, `ctrl+space`, `d`, `p` and `P` all
 apply to the subtask under the cursor rather than its parent. `x` on a block
 line removes just that line. Subtasks keep the order you wrote them in — only
 top-level tasks are sorted.
+
+Adding and editing work at both levels:
+
+- `A` on a task appends a subtask to its block, unfolding it first.
+- `a` on a block line inserts a sibling directly after it.
+- `e` edits whatever is under the cursor — task, subtask or note — prefilled
+  with its text. A subtask keeps its status and any metadata the new text does
+  not mention, exactly as editing a task does. A note retyped as `- [ ] …`
+  becomes a subtask.
+
+Metadata can be given inline when adding a subtask, so `!! ship it +proj @desk`
+works there too.
 
 Blocks are one level deep. Anything more deeply indented in the source is read
 as an ordinary block line and written back at two spaces, so saving normalises

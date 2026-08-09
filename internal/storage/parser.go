@@ -136,6 +136,12 @@ func (p *Parser) Parse(content string) (*TaskFile, error) {
 	return tf, nil
 }
 
+// ParseTaskText reads a single "- [ ] ..." line, for text typed into an
+// editor. It reports false when the text is not a checkbox item.
+func ParseTaskText(text string) (task.Task, bool) {
+	return parseTaskLine(strings.TrimSpace(text), task.StatusTodo, 0, text)
+}
+
 // parseBlock consumes the run of indented lines beneath a task.
 //
 // It stops at the first line that is blank or not indented. Depth beyond the
