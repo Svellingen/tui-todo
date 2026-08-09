@@ -256,6 +256,9 @@ func newListCmd(out io.Writer, resolve storeResolver) *cobra.Command {
 				for _, tag := range t.Tags {
 					meta = append(meta, "+"+tag)
 				}
+				for _, ctx := range t.Contexts {
+					meta = append(meta, "@"+ctx)
+				}
 				if len(meta) > 0 {
 					line += " " + strings.Join(meta, " ")
 				}

@@ -175,7 +175,9 @@ func parseTaskLine(trimmed string, sectionStatus task.Status, lineNum int, raw s
 	}
 
 	// Parse metadata from rest of line
-	t.Title, t.Priority, t.Tags, t.DueDate = ParseMetadata(rest)
+	meta := ParseMetadata(rest)
+	t.Title, t.Priority, t.Tags, t.Contexts, t.DueDate =
+		meta.Title, meta.Priority, meta.Tags, meta.Contexts, meta.DueDate
 
 	return t, true
 }
@@ -209,12 +211,25 @@ func splitPriorityMarker(text string) (string, task.Priority) {
 	return strings.TrimLeft(rest[marks:], " \t"), priority
 }
 
-// ParseMetadata extracts title, priority, tags, and due date from task text.
+// Metadata is everything a task line carries besides its title.
+type Metadata struct {
+	Title    string
+	Priority task.Priority
+	Tags     []string
+	Contexts []string
+	DueDate  *time.Time
+}
+
+// ParseMetadata extracts the title and metadata from task text.
+//
 // Priority is a leading "!" marker; the title is everything after it that is
-// not a metadata token.
+// not a metadata token. Tags and contexts are separate axes: "+tag" is a tag,
+// "@context" is a context, and neither is rewritten as the other.
+//
 // Metadata tokens: +tag, @context, due:YYYY-MM-DD, created:YYYY-MM-DD, done:YYYY-MM-DD
-func ParseMetadata(text string) (title string, priority task.Priority, tags []string, dueDate *time.Time) {
-	text, priority = splitPriorityMarker(text)
+func ParseMetadata(text string) Metadata {
+	var m Metadata
+	text, m.Priority = splitPriorityMarker(text)
 
 	words := strings.Fields(text)
 	var titleWords []string
@@ -224,32 +239,30 @@ func ParseMetadata(text string) (title string, priority task.Priority, tags []st
 		case strings.HasPrefix(word, "priority:"):
 			// Legacy form, still read so existing files keep their priorities.
 			// Anything written back out uses the "!" marker.
-			if priority != task.PriorityNone {
+			if m.Priority != task.PriorityNone {
 				break
 			}
 			switch strings.ToLower(strings.TrimPrefix(word, "priority:")) {
 			case "high":
-				priority = task.PriorityHigh
+				m.Priority = task.PriorityHigh
 			// The scale no longer has a separate low level, so the weakest
 			// legacy priority becomes the weakest current one rather than
 			// being dropped.
 			case "medium", "med", "low":
-				priority = task.PriorityMedium
+				m.Priority = task.PriorityMedium
 			}
 		case strings.HasPrefix(word, "+"):
-			tag := strings.TrimPrefix(word, "+")
-			if tag != "" {
-				tags = append(tags, tag)
+			if tag := strings.TrimPrefix(word, "+"); tag != "" {
+				m.Tags = append(m.Tags, tag)
 			}
 		case strings.HasPrefix(word, "@"):
-			ctx := strings.TrimPrefix(word, "@")
-			if ctx != "" {
-				tags = append(tags, ctx)
+			if ctx := strings.TrimPrefix(word, "@"); ctx != "" {
+				m.Contexts = append(m.Contexts, ctx)
 			}
 		case strings.HasPrefix(word, "due:"):
 			val := strings.TrimPrefix(word, "due:")
 			if t, err := time.Parse("2006-01-02", val); err == nil {
-				dueDate = &t
+				m.DueDate = &t
 			}
 		case strings.HasPrefix(word, "created:"):
 			// Parsed but not yet stored (CreatedDate field exists but we skip for now)
@@ -260,6 +273,6 @@ func ParseMetadata(text string) (title string, priority task.Priority, tags []st
 		}
 	}
 
-	title = strings.Join(titleWords, " ")
-	return
+	m.Title = strings.Join(titleWords, " ")
+	return m
 }

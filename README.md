@@ -74,7 +74,7 @@ todo
 | `Space` | Cycle status forward (todo → in-progress → done, wrapping) |
 | `ctrl+space` | Step status back (done → in-progress → todo, stopping at todo) |
 | `p` / `P` | Raise / lower priority (none ↔ `!` ↔ `!!`, stopping at each end) |
-| `t` | Add tag to task |
+| `t` / `c` | Add a tag / a context to the task |
 | `u` / `ctrl+r` | Undo / redo |
 | `o` | Open the task file in an editor |
 
@@ -83,7 +83,7 @@ todo
 | Key | Action |
 |-----|--------|
 | `/` | Search by title (live filtering) |
-| `T` | Filter by tag |
+| `T` / `C` | Filter by tag / by context (press again to clear) |
 | `1` | Show all tasks |
 | `2` | Show active only (todo + in-progress) |
 | `3` | Show done only |
@@ -263,6 +263,21 @@ showing an arbitrary slice.
 While focused, the `ctrl+e` popup lists only the headings inside the focus.
 Widen with `f` to jump elsewhere.
 
+## Tags and Contexts
+
+Tags (`+tag`) and contexts (`@context`) are separate axes, each with its own
+key and colour — tags in mauve, contexts in rose:
+
+```markdown
+- [ ] write docs +work @home
+- [ ] call bank @errands
+```
+
+`t` and `c` attach one to the selected task; `T` and `C` filter by one, and
+pressing the same key again clears that filter. The two compose, so `+work`
+and `@home` together shows only tasks carrying both. Either can also be typed
+inline while adding or editing a task.
+
 ## Sorting
 
 Tasks are kept sorted inside each section, top to bottom:
@@ -350,7 +365,7 @@ Tasks are stored in `tasks.md` using GitHub-Flavored Markdown checkbox syntax:
 - `- [ ]` todo, `- [-]` in-progress, `- [x]` done
 - `!` medium, `!!` high priority — a prefix before the title
 - `+tag` adds a tag
-- `@context` adds a context tag
+- `@context` adds a context
 - `due:YYYY-MM-DD` sets a due date
 
 ### Priority

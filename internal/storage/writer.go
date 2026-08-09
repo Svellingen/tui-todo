@@ -76,6 +76,11 @@ func formatTask(t task.Task) string {
 		fmt.Fprintf(&sb, " +%s", tag)
 	}
 
+	// Contexts keep their own sigil rather than being folded into tags.
+	for _, ctx := range t.Contexts {
+		fmt.Fprintf(&sb, " @%s", ctx)
+	}
+
 	// Due date
 	if t.DueDate != nil {
 		fmt.Fprintf(&sb, " due:%s", t.DueDate.Format("2006-01-02"))

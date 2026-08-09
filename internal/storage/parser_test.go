@@ -81,8 +81,11 @@ func TestParseMetadata(t *testing.T) {
 	if tk.Priority != task.PriorityHigh {
 		t.Errorf("expected PriorityHigh, got %d", tk.Priority)
 	}
-	if len(tk.Tags) != 2 || tk.Tags[0] != "backend" || tk.Tags[1] != "security" {
-		t.Errorf("expected tags [backend, security], got %v", tk.Tags)
+	if len(tk.Tags) != 1 || tk.Tags[0] != "backend" {
+		t.Errorf("expected tags [backend], got %v", tk.Tags)
+	}
+	if len(tk.Contexts) != 1 || tk.Contexts[0] != "security" {
+		t.Errorf("expected contexts [security], got %v", tk.Contexts)
 	}
 	if tk.DueDate == nil {
 		t.Fatal("expected due date to be set")
@@ -284,5 +287,53 @@ func TestParsePreservesNonTaskLines(t *testing.T) {
 	}
 	if len(result.Lines) < 5 {
 		t.Fatalf("expected preserved lines, got %d", len(result.Lines))
+	}
+}
+
+// Tags and contexts are separate axes: "+x" is a tag, "@x" is a context, and
+// a task can carry both.
+func TestParseSeparatesTagsAndContexts(t *testing.T) {
+	tf, err := NewParser().Parse("## Backlog\n- [ ] task +work +urgent @home @errands\n")
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	got := tf.Tasks[0]
+
+	if len(got.Tags) != 2 || got.Tags[0] != "work" || got.Tags[1] != "urgent" {
+		t.Errorf("tags: got %v", got.Tags)
+	}
+	if len(got.Contexts) != 2 || got.Contexts[0] != "home" || got.Contexts[1] != "errands" {
+		t.Errorf("contexts: got %v", got.Contexts)
+	}
+	if got.Title != "task" {
+		t.Errorf("title: got %q", got.Title)
+	}
+}
+
+// A context survives a round-trip as "@x" rather than being rewritten as a tag.
+func TestContextRoundTrips(t *testing.T) {
+	input := "## Backlog\n- [ ] task +work @home\n"
+
+	tf, err := NewParser().Parse(input)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if got := NewWriter().Write(tf); got != input {
+		t.Errorf("expected:\n%s\ngot:\n%s", input, got)
+	}
+}
+
+// A bare sigil is text, not an empty label.
+func TestParseIgnoresBareSigils(t *testing.T) {
+	tf, err := NewParser().Parse("## Backlog\n- [ ] email me @ noon +\n")
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	got := tf.Tasks[0]
+	if len(got.Contexts) != 0 {
+		t.Errorf("expected no contexts, got %v", got.Contexts)
+	}
+	if len(got.Tags) != 0 {
+		t.Errorf("expected no tags, got %v", got.Tags)
 	}
 }

@@ -9,13 +9,15 @@ import (
 
 // Color palette — cohesive purple/blue theme with semantic colors.
 var (
-	ColorPurple    = lipgloss.AdaptiveColor{Light: "#5B21B6", Dark: "#A78BFA"}
-	ColorBlue      = lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#60A5FA"}
-	ColorCyan      = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#67E8F9"}
-	ColorGreen     = lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#86EFAC"}
-	ColorRed       = lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#FCA5A5"}
-	ColorYellow    = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FDE68A"}
-	ColorMauve     = lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#C4B5FD"}
+	ColorPurple = lipgloss.AdaptiveColor{Light: "#5B21B6", Dark: "#A78BFA"}
+	ColorBlue   = lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#60A5FA"}
+	ColorCyan   = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#67E8F9"}
+	ColorGreen  = lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#86EFAC"}
+	ColorRed    = lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#FCA5A5"}
+	ColorYellow = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FDE68A"}
+	ColorMauve  = lipgloss.AdaptiveColor{Light: "#6D28D9", Dark: "#C4B5FD"}
+	// Contexts get a rose of their own so they read apart from mauve tags.
+	ColorRose      = lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F9A8D4"}
 	ColorGray      = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
 	ColorDimGray   = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"}
 	ColorFaintGray = lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#4B5563"}
@@ -36,6 +38,7 @@ var (
 	PriorityHigh   = lipgloss.NewStyle().Foreground(ColorRed).Bold(true)
 	PriorityMedium = lipgloss.NewStyle().Foreground(ColorYellow)
 	Tag            = lipgloss.NewStyle().Foreground(ColorMauve)
+	Context        = lipgloss.NewStyle().Foreground(ColorRose)
 	DueStyle       = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
 	DoneTask       = lipgloss.NewStyle().Foreground(ColorFaintGray).Strikethrough(true)
 	DoneMeta       = lipgloss.NewStyle().Foreground(ColorFaintGray)

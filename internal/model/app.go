@@ -55,6 +55,29 @@ const (
 	modePicker
 )
 
+// labelKind distinguishes the two axes the select popup filters on.
+type labelKind int
+
+const (
+	labelTag labelKind = iota
+	labelContext
+)
+
+// sigil is the character a label is written with.
+func (k labelKind) sigil() string {
+	if k == labelContext {
+		return "@"
+	}
+	return "+"
+}
+
+func (k labelKind) noun() string {
+	if k == labelContext {
+		return "context"
+	}
+	return "tag"
+}
+
 // undoEntry is a snapshot of the file plus where the cursor was, so undoing
 // puts you back where you were working rather than at the top of the list.
 type undoEntry struct {
@@ -80,6 +103,8 @@ type App struct {
 	statusMsg  string
 	tagOptions []string
 	tagCursor  int
+	// labelKind says whether the select popup is filtering tags or contexts.
+	labelKind labelKind
 
 	// stamp is the fingerprint of the task file as the app last saw it, so an
 	// outside edit can be told from the app's own writes.
@@ -493,7 +518,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			if a.tagCursor >= 0 && a.tagCursor < len(a.tagOptions) {
-				a.list.SetTagFilter(a.tagOptions[a.tagCursor])
+				if a.labelKind == labelContext {
+					a.list.SetContextFilter(a.tagOptions[a.tagCursor])
+				} else {
+					a.list.SetTagFilter(a.tagOptions[a.tagCursor])
+				}
 			}
 			a.mode = modeNormal
 			a.tagOptions = nil
@@ -642,9 +671,13 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.updateListSize()
 		return a, nil
 	case ui.KeyTag:
-		return a.addTag()
+		return a.addLabel(labelTag)
+	case ui.KeyContext:
+		return a.addLabel(labelContext)
 	case ui.KeyFilterTag:
-		return a.openTagFilter()
+		return a.openLabelFilter(labelTag)
+	case ui.KeyFilterContext:
+		return a.openLabelFilter(labelContext)
 	case ui.KeyHelp:
 		a.mode = modeHelp
 		return a, nil
@@ -832,16 +865,19 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 	case inputEdit:
 		idx := a.input.EditIndex()
 		if idx >= 0 && idx < len(a.taskFile.Tasks) {
-			title, priority, tags, dueDate := storage.ParseMetadata(value)
-			a.taskFile.Tasks[idx].Title = title
-			if priority != task.PriorityNone {
-				a.taskFile.Tasks[idx].Priority = priority
+			meta := storage.ParseMetadata(value)
+			a.taskFile.Tasks[idx].Title = meta.Title
+			if meta.Priority != task.PriorityNone {
+				a.taskFile.Tasks[idx].Priority = meta.Priority
 			}
-			if len(tags) > 0 {
-				a.taskFile.Tasks[idx].Tags = tags
+			if len(meta.Tags) > 0 {
+				a.taskFile.Tasks[idx].Tags = meta.Tags
 			}
-			if dueDate != nil {
-				a.taskFile.Tasks[idx].DueDate = dueDate
+			if len(meta.Contexts) > 0 {
+				a.taskFile.Tasks[idx].Contexts = meta.Contexts
+			}
+			if meta.DueDate != nil {
+				a.taskFile.Tasks[idx].DueDate = meta.DueDate
 			}
 		}
 		a.addAnchorLine = -1
@@ -857,11 +893,16 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 		a.updateListSize()
 		return a, nil
 
-	case inputTag:
+	case inputTag, inputContext:
 		idx := a.list.SelectedTaskIndex()
 		if idx >= 0 && idx < len(a.taskFile.Tasks) {
-			a.pushUndo("add tag")
-			a.taskFile.Tasks[idx].Tags = append(a.taskFile.Tasks[idx].Tags, value)
+			if a.input.Mode() == inputContext {
+				a.pushUndo("add context")
+				a.taskFile.Tasks[idx].Contexts = append(a.taskFile.Tasks[idx].Contexts, value)
+			} else {
+				a.pushUndo("add tag")
+				a.taskFile.Tasks[idx].Tags = append(a.taskFile.Tasks[idx].Tags, value)
+			}
 		}
 		a.addAnchorLine = -1
 		a.input.Cancel()
@@ -879,13 +920,14 @@ func (a App) commitInput() (tea.Model, tea.Cmd) {
 
 // addTask inserts a task and returns its index in TaskFile.Tasks.
 func (a *App) addTask(value string) int {
-	title, priority, tags, dueDate := storage.ParseMetadata(value)
+	meta := storage.ParseMetadata(value)
 	newTask := task.Task{
-		Title:    title,
+		Title:    meta.Title,
 		Status:   task.StatusTodo,
-		Priority: priority,
-		Tags:     tags,
-		DueDate:  dueDate,
+		Priority: meta.Priority,
+		Tags:     meta.Tags,
+		Contexts: meta.Contexts,
+		DueDate:  meta.DueDate,
 	}
 
 	// The new task goes next to whatever the cursor was on: beneath a selected
@@ -1031,30 +1073,47 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
-func (a App) addTag() (tea.Model, tea.Cmd) {
+// addLabel opens the prompt for attaching a tag or a context to the selected
+// task.
+func (a App) addLabel(kind labelKind) (tea.Model, tea.Cmd) {
 	if a.list.SelectedTaskItem() == nil {
 		return a, nil
 	}
 	a.mode = modeInput
-	a.input.StartTag()
+	if kind == labelContext {
+		a.input.StartContext()
+	} else {
+		a.input.StartTag()
+	}
 	a.updateListSize()
 	return a, nil
 }
 
-func (a App) openTagFilter() (tea.Model, tea.Cmd) {
-	if a.list.TagFilter() != "" {
+// openLabelFilter shows the picker for filtering by tag or context, or clears
+// that filter when one is already applied.
+func (a App) openLabelFilter(kind labelKind) (tea.Model, tea.Cmd) {
+	if kind == labelContext {
+		if a.list.ContextFilter() != "" {
+			a.list.ClearContextFilter()
+			return a, nil
+		}
+	} else if a.list.TagFilter() != "" {
 		a.list.ClearTagFilter()
 		return a, nil
 	}
 
-	tags := a.list.AllTags()
-	if len(tags) == 0 {
-		a.statusMsg = "No tags found"
+	options := a.list.AllTags()
+	if kind == labelContext {
+		options = a.list.AllContexts()
+	}
+	if len(options) == 0 {
+		a.statusMsg = "No " + kind.noun() + "s found"
 		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return flashMsg{} })
 	}
 
 	a.mode = modeTagSelect
-	a.tagOptions = tags
+	a.labelKind = kind
+	a.tagOptions = options
 	a.tagCursor = 0
 	a.updateListSize()
 	return a, nil
@@ -1285,18 +1344,24 @@ func (a App) View() string {
 			lines = append(lines, ui.InputLabel.Render("  / ")+a.input.View())
 		case inputTag:
 			lines = append(lines, ui.InputLabel.Render("  Tag: ")+a.input.View())
+		case inputContext:
+			lines = append(lines, ui.InputLabel.Render("  Context: ")+a.input.View())
 		}
 	}
 
 	// Tag selector (if active)
 	if a.mode == modeTagSelect && len(a.tagOptions) > 0 {
-		lines = append(lines, "  "+ui.InputLabel.Render("Filter by tag:"))
-		for i, tag := range a.tagOptions {
+		lines = append(lines, "  "+ui.InputLabel.Render("Filter by "+a.labelKind.noun()+":"))
+		style := ui.Tag
+		if a.labelKind == labelContext {
+			style = ui.Context
+		}
+		for i, label := range a.tagOptions {
 			cursor := "    "
 			if i == a.tagCursor {
 				cursor = ui.CursorStyle.Render("  ▸ ")
 			}
-			lines = append(lines, cursor+ui.Tag.Render("+"+tag))
+			lines = append(lines, cursor+style.Render(a.labelKind.sigil()+label))
 		}
 	}
 

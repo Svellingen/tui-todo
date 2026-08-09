@@ -14,6 +14,7 @@ const (
 	inputEdit
 	inputSearch
 	inputTag
+	inputContext
 )
 
 // TaskInputModel wraps a bubbles textinput for add/edit operations.
@@ -67,6 +68,15 @@ func (m *TaskInputModel) StartTag() {
 	m.editIndex = -1
 	m.input.SetValue("")
 	m.input.Placeholder = "Tag name..."
+	m.input.Focus()
+}
+
+// StartContext begins the add-context flow.
+func (m *TaskInputModel) StartContext() {
+	m.mode = inputContext
+	m.editIndex = -1
+	m.input.SetValue("")
+	m.input.Placeholder = "Context name..."
 	m.input.Focus()
 }
 

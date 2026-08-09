@@ -68,11 +68,13 @@ const (
 	// Toggle the task file's path in the title bar.
 	KeyToggleFilename = "i"
 
-	KeyFilterAll    = "1"
-	KeyFilterActive = "2"
-	KeyFilterDone   = "3"
-	KeyFocus        = "f"
-	KeySearch       = "/"
-	KeyTag          = "t"
-	KeyFilterTag    = "T"
+	KeyFilterAll     = "1"
+	KeyFilterActive  = "2"
+	KeyFilterDone    = "3"
+	KeyFocus         = "f"
+	KeySearch        = "/"
+	KeyTag           = "t"
+	KeyContext       = "c"
+	KeyFilterTag     = "T"
+	KeyFilterContext = "C"
 )

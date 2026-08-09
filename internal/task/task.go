@@ -25,6 +25,7 @@ type Task struct {
 	Status      Status
 	Priority    Priority
 	Tags        []string
+	Contexts    []string
 	DueDate     *time.Time
 	CreatedDate time.Time
 	DoneDate    *time.Time

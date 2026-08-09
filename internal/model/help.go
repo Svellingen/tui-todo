@@ -38,13 +38,13 @@ func helpContent() string {
 			{"x", "Delete task, or heading + contents"},
 			{"Space / C-Space", "Cycle status fwd / back"},
 			{"p / P", "Raise / lower priority"},
-			{"t", "Add tag"},
+			{"t / c", "Add tag / context"},
 			{"u / ctrl+r", "Undo / redo"},
 			{"o", "Open file in editor"},
 		}},
 		{"Filtering", []ui.HelpItem{
 			{"/", "Search by title"},
-			{"T", "Filter by tag"},
+			{"T / C", "Filter by tag / context"},
 			{"1", "Show all"},
 			{"2", "Active only"},
 			{"3", "Done only"},
@@ -61,7 +61,7 @@ func helpContent() string {
 	for i, g := range groups {
 		sb.WriteString(ui.SectionHeader.Render(g.name) + "\n")
 		for _, item := range g.items {
-			key := ui.HelpKey.Render(padRight(item.Key, 14))
+			key := ui.HelpKey.Render(padRight(item.Key, 16))
 			desc := ui.HelpBar.Render(item.Desc)
 			sb.WriteString("  " + key + " " + desc + "\n")
 		}

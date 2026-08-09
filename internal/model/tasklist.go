@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/macone/todo-cli/internal/storage"
@@ -36,15 +37,16 @@ const (
 
 // TaskListModel handles rendering and navigating the task list.
 type TaskListModel struct {
-	taskFile     *storage.TaskFile
-	items        []item
-	cursor       int
-	width        int
-	height       int
-	scrollOffset int
-	statusFilter statusFilter
-	searchQuery  string
-	tagFilter    string
+	taskFile      *storage.TaskFile
+	items         []item
+	cursor        int
+	width         int
+	height        int
+	scrollOffset  int
+	statusFilter  statusFilter
+	searchQuery   string
+	tagFilter     string
+	contextFilter string
 	// hideCursor suppresses the row marker while an inline editor is open.
 	hideCursor bool
 
@@ -149,17 +151,11 @@ func (m *TaskListModel) taskVisible(idx int) bool {
 		}
 	}
 
-	if m.tagFilter != "" {
-		found := false
-		for _, tag := range t.Tags {
-			if tag == m.tagFilter {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if m.tagFilter != "" && !slices.Contains(t.Tags, m.tagFilter) {
+		return false
+	}
+	if m.contextFilter != "" && !slices.Contains(t.Contexts, m.contextFilter) {
+		return false
 	}
 
 	return true
@@ -195,6 +191,33 @@ func (m *TaskListModel) ClearTagFilter() {
 }
 
 func (m TaskListModel) TagFilter() string { return m.tagFilter }
+
+func (m *TaskListModel) SetContextFilter(ctx string) {
+	m.contextFilter = ctx
+	m.rebuildItems()
+}
+
+func (m *TaskListModel) ClearContextFilter() {
+	m.contextFilter = ""
+	m.rebuildItems()
+}
+
+func (m TaskListModel) ContextFilter() string { return m.contextFilter }
+
+// AllContexts lists every context in the file, in first-seen order.
+func (m TaskListModel) AllContexts() []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, t := range m.taskFile.Tasks {
+		for _, c := range t.Contexts {
+			if !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
 
 func (m TaskListModel) AllTags() []string {
 	seen := make(map[string]bool)
@@ -650,6 +673,9 @@ func (m TaskListModel) FilterIndicator() string {
 	if m.tagFilter != "" {
 		parts = append(parts, fmt.Sprintf("+%s", m.tagFilter))
 	}
+	if m.contextFilter != "" {
+		parts = append(parts, fmt.Sprintf("@%s", m.contextFilter))
+	}
 	if len(parts) == 0 {
 		return ""
 	}
@@ -846,10 +872,13 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 		prio = ui.PriorityMedium.Render(marker)
 	}
 
-	// Tags
+	// Tags, then contexts in their own colour.
 	var tagParts []string
 	for _, tag := range t.Tags {
 		tagParts = append(tagParts, ui.Tag.Render("+"+tag))
+	}
+	for _, ctx := range t.Contexts {
+		tagParts = append(tagParts, ui.Context.Render("@"+ctx))
 	}
 	tagStr := strings.Join(tagParts, " ")
 
