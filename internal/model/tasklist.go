@@ -162,8 +162,7 @@ func (m *TaskListModel) taskVisible(idx int) bool {
 }
 
 func (m *TaskListModel) SetStatusFilter(f statusFilter) {
-	m.statusFilter = f
-	m.rebuildItems()
+	m.withPreservedCursor(func() { m.statusFilter = f })
 }
 
 func (m TaskListModel) StatusFilter() statusFilter { return m.statusFilter }
@@ -181,25 +180,21 @@ func (m *TaskListModel) ClearSearch() {
 func (m TaskListModel) SearchQuery() string { return m.searchQuery }
 
 func (m *TaskListModel) SetTagFilter(tag string) {
-	m.tagFilter = tag
-	m.rebuildItems()
+	m.withPreservedCursor(func() { m.tagFilter = tag })
 }
 
 func (m *TaskListModel) ClearTagFilter() {
-	m.tagFilter = ""
-	m.rebuildItems()
+	m.withPreservedCursor(func() { m.tagFilter = "" })
 }
 
 func (m TaskListModel) TagFilter() string { return m.tagFilter }
 
 func (m *TaskListModel) SetContextFilter(ctx string) {
-	m.contextFilter = ctx
-	m.rebuildItems()
+	m.withPreservedCursor(func() { m.contextFilter = ctx })
 }
 
 func (m *TaskListModel) ClearContextFilter() {
-	m.contextFilter = ""
-	m.rebuildItems()
+	m.withPreservedCursor(func() { m.contextFilter = "" })
 }
 
 func (m TaskListModel) ContextFilter() string { return m.contextFilter }
@@ -1077,20 +1072,41 @@ func (m TaskListModel) captureCursor() cursorAnchor {
 	}
 }
 
-func (m *TaskListModel) restoreCursor(a cursorAnchor) {
+// restoreCursor puts the cursor back on the anchored item, reporting whether
+// that item still exists.
+func (m *TaskListModel) restoreCursor(a cursorAnchor) bool {
 	if !a.valid {
-		return
+		return false
 	}
 	for i, it := range m.items {
 		if a.isSection && it.kind == itemSection && it.lineIndex == a.lineIndex {
 			m.cursor = i
 			m.adjustScroll()
-			return
+			return true
 		}
 		if !a.isSection && it.kind == itemTask && it.taskIndex == a.taskIndex {
 			m.cursor = i
 			m.adjustScroll()
-			return
+			return true
 		}
+	}
+	return false
+}
+
+// withPreservedCursor applies a change that rebuilds the list, then puts the
+// cursor back where it was -- on the same item, or failing that as near to its
+// old position as the new contents allow.
+//
+// Switching filters would otherwise dump you at the top of the list every
+// time, which is jarring when the change hides only a task or two.
+func (m *TaskListModel) withPreservedCursor(change func()) {
+	anchor := m.captureCursor()
+	pos := m.cursor
+
+	change()
+	m.rebuildItems()
+
+	if !m.restoreCursor(anchor) {
+		m.SelectItemNear(pos)
 	}
 }

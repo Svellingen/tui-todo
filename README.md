@@ -89,6 +89,10 @@ todo
 | `3` | Show done only |
 | `f` | Focus the current heading — show only its tasks (toggle) |
 
+Switching between these keeps the cursor on the task it was on. If the change
+hides that task, the cursor lands near where it was rather than at the top of
+the list.
+
 ### General
 
 | Key | Action |
