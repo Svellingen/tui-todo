@@ -61,7 +61,7 @@ todo
 | `tab` | Fold every block — shuts them all if any is open, else opens them all |
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
-| `alt+j` / `alt+k` | Move the selected task down / up within its sort group |
+| `alt+j` / `alt+k` | Move the selected task down / up within its sort group — or a subtask or note within its block |
 | `alt+shift+j` / `alt+shift+k` | Move the selected task to the next / previous heading |
 
 ### Actions
@@ -70,6 +70,7 @@ todo
 |-----|--------|
 | `a` | Add a task inline below the selection — or a sibling subtask when on a block line |
 | `A` | Add a subtask to the selected task |
+| `n` | Add a note to the selected task — or directly below the selected block line |
 | `e` | Edit the task, subtask or note inline, on its own row |
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
@@ -101,7 +102,7 @@ the list.
 |-----|--------|
 | `i` | Toggle the task file's path in the title bar (off by default) |
 | `?` | Toggle help overlay |
-| `q` | Quit |
+| `q` / `ctrl+c` | Quit |
 
 ## File Resolution
 
@@ -162,7 +163,7 @@ well as top-level ones.
 ### Selecting headings
 
 `J` and `K` select headings themselves; `j` and `k` step over them between
-tasks. `ctrl+j` and `ctrl+k` do the same as `tab`, but stop only at
+tasks. `ctrl+j` and `ctrl+k` do the same as `J` and `K`, but stop only at
 `##` headings — handy for moving between major sections in a file with a lot
 of sub-headings. A `#` title is a different level, so it is not one of their
 stops; `J` and `K` still reach it.
@@ -188,13 +189,13 @@ With a heading selected:
   From a task, `a` instead adds directly below that task, keeping it in the
   same section.
 - `x` deletes the heading together with everything nested under it — its
-  sub-headings, their tasks, and any prose in between, up to the next heading
+  sub-headings, their tasks, and their notes, up to the next heading
   of the same or shallower level. This one asks for confirmation first, naming
   what will go: `Delete "Alpha" with 2 sub-headings and 4 tasks? y/n`. It is
   still undoable with `u`.
 
-Actions that need a task — `d`, `Space`, `p`, `e`, `t`, `alt+j`/`alt+k` — do
-nothing while a heading is selected.
+Actions that need a task — `d`, `Space`, `p`, `e`, `t`, `c`, `A`, `n`,
+`alt+j`/`alt+k` — do nothing while a heading is selected.
 
 ## Editing in Place
 
@@ -209,8 +210,8 @@ an *add* discards it, since there is no earlier text to keep. Clearing a title
 entirely and pressing either key leaves the task as it was rather than saving a
 blank one.
 
-Search (`/`) and the tag prompt (`t`) still appear below the list, since
-neither belongs to a particular row.
+Search (`/`) and the label prompts (`t`, `c`) still appear below the list,
+since none of them belongs to a particular row.
 
 ## The Heading Popup
 
@@ -248,11 +249,11 @@ focusing a `##` shows the whole branch beneath it.
 
 ```
 ✦ todo  [focus: Alpha]
-   Alpha
-   ○  alpha one
- ▸ ○  alpha two
+ - Alpha
+   ○   alpha one
+   ○   alpha two
    Alpha sub
-   ○  sub task
+   ○   sub task
 ```
 
 Press `f` again to widen back out. The cursor is kept across both, whether it
@@ -311,23 +312,44 @@ On a block line the cursor sits two columns further in, under the parent's
 bullet.
 
 The block travels with its task — sorting, moving between headings, deleting
-and undo all carry it. `Enter` folds it open and shut. `tab` folds the whole file: if any block is
-open it shuts them all, otherwise it opens them all. Blocks start folded.
+and undo all carry it. `Enter` folds it open and shut. `tab` folds the whole
+file: if any block is open it shuts them all, otherwise it opens them all.
+Blocks start folded.
 
 While expanded, `j` and `k` walk into the block. A subtask behaves like a task
 for the things that act in place: `Space`, `ctrl+space`, `d`, `p` and `P` all
-apply to the subtask under the cursor rather than its parent. `x` on a block
-line removes just that line. Subtasks keep the order you wrote them in — only
-top-level tasks are sorted.
+apply to the subtask under the cursor rather than its parent.
+
+Inside a block the status scale has a fourth step below todo — being a note at
+all:
+
+```
+note  →  todo  →  in progress  →  done
+```
+
+`Space` walks it forward, wrapping from done back to a note; `ctrl+space` walks
+it back and stops at a note. So `Space` on a note turns it into a subtask, and
+`ctrl+space` off todo turns a subtask back into a note.
+
+Converting keeps what the other form can hold: a demoted subtask leaves its
+marker and labels in the note text (`- [ ] !! ship it +work` becomes
+`!! ship it +work`), and promoting it reads them back as priority and tags. The
+status is the one thing a note cannot carry, so a promoted note starts at todo.
+
+`x` on a block line removes just that line. Subtasks keep the order you wrote
+them in — only top-level tasks are sorted.
 
 Adding and editing work at both levels:
 
 - `A` on a task appends a subtask to its block, unfolding it first.
+- `n` appends a note to the selected task's block, or inserts one directly
+  after the selected block line.
 - `a` on a block line inserts a sibling directly after it.
 - `e` edits whatever is under the cursor — task, subtask or note — prefilled
-  with its text. A subtask keeps its status and any metadata the new text does
-  not mention, exactly as editing a task does. A note retyped as `- [ ] …`
-  becomes a subtask.
+  with its text. A note is edited without a bullet, since it is not a task. A
+  subtask keeps its status and any metadata the new text does not mention,
+  exactly as editing a task does. A note retyped as `- [ ] …` becomes a
+  subtask.
 
 Metadata can be given inline when adding a subtask, so `!! ship it +proj @desk`
 works there too.
@@ -366,6 +388,10 @@ manual order survives later sorts. A move that would cross into another rank,
 or out of the section, does nothing — priority ordering can't be broken by
 hand. Changing a task's status or priority re-sorts it immediately, with the
 cursor following the task rather than staying at the same screen position.
+
+Block lines are not sorted — they keep the order they are written in — so on a
+subtask or a note the same `alt+j` and `alt+k` reorder freely within the block,
+stopping at its ends. A block line never leaves its own task this way.
 
 ## Editing in an Editor
 
@@ -457,20 +483,13 @@ scale still has.
 
 ## Configuration
 
-Configuration is loaded from `.todo.toml` (project-local) or `~/.config/todo/config.toml` (global). Local settings override global.
+There is none yet. Section names (`Backlog`, `In Progress`, `Done`) are
+recognised by name in the parser, and the task file is found by the resolution
+rules above or named outright with `--file`.
 
-```toml
-# File to use for tasks (default: "tasks.md")
-file = "tasks.md"
-
-[sections]
-todo = "Backlog"
-in_progress = "In Progress"
-done = "Done"
-
-[ui]
-show_done = true
-```
+An `internal/config` package exists that reads `.todo.toml` and
+`~/.config/todo/config.toml`, but nothing imports it, so those files are
+ignored if present.
 
 ## Development
 
