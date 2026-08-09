@@ -567,10 +567,11 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Enter is a second way in to adding a task. Matched on the key type
-	// rather than the name, so pasted text spelling "enter" cannot trigger it.
+	// Enter folds the selected task's block. Matched on the key type rather
+	// than the name, so pasted text spelling "enter" cannot trigger it.
 	if msg.Type == tea.KeyEnter {
-		return a.startAdd()
+		a.list.ToggleExpand()
+		return a, nil
 	}
 
 	// "g" is a prefix: a second "g" jumps to the top, anything else falls
@@ -595,10 +596,12 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.list.MoveDown()
 	case ui.KeyUp, ui.KeyArrowUp:
 		a.list.MoveUp()
-	case ui.KeySectionDown, ui.KeySectionNext:
+	case ui.KeySectionDown:
 		a.list.JumpNextSection()
-	case ui.KeySectionUp, ui.KeySectionPrev:
+	case ui.KeySectionUp:
 		a.list.JumpPrevSection()
+	case ui.KeyToggleExpandAll:
+		a.list.ToggleExpandAll()
 	case ui.KeyMajorSectionNext:
 		a.list.JumpNextSectionOfLevel(majorHeadingLevel)
 	case ui.KeyMajorSectionPrev:
@@ -630,6 +633,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ui.KeyDelete:
 		if a.list.SelectedSectionLine() >= 0 {
 			return a.confirmDeleteSection()
+		}
+		if parent, block := a.list.SelectedBlockLine(); parent >= 0 {
+			return a.deleteBlockLine(parent, block)
 		}
 		return a.doDelete()
 	case ui.KeyStatus:
@@ -1040,6 +1046,26 @@ func (a App) doDeleteSection() (tea.Model, tea.Cmd) {
 	return a, tea.Batch(saveCmd, cmd)
 }
 
+// deleteBlockLine removes one line from a task's block, leaving the task and
+// the rest of its block alone.
+func (a App) deleteBlockLine(parent, index int) (tea.Model, tea.Cmd) {
+	if parent < 0 || parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	block := a.taskFile.Tasks[parent].Block
+	if index < 0 || index >= len(block) {
+		return a, nil
+	}
+
+	a.pushUndo("delete block line")
+	pos := a.list.Cursor()
+	a.taskFile.Tasks[parent].Block = append(block[:index], block[index+1:]...)
+
+	cmd := a.save()
+	a.list.SelectPrecedingItem(pos - 1)
+	return a, cmd
+}
+
 // doDelete removes the selected task outright. There is no confirmation step;
 // "u" undoes it.
 func (a App) doDelete() (tea.Model, tea.Cmd) {
@@ -1076,7 +1102,7 @@ func (a App) doDelete() (tea.Model, tea.Cmd) {
 // addLabel opens the prompt for attaching a tag or a context to the selected
 // task.
 func (a App) addLabel(kind labelKind) (tea.Model, tea.Cmd) {
-	if a.list.SelectedTaskItem() == nil {
+	if a.list.SelectedTaskIndex() < 0 {
 		return a, nil
 	}
 	a.mode = modeInput
@@ -1359,7 +1385,7 @@ func (a App) View() string {
 		for i, label := range a.tagOptions {
 			cursor := "    "
 			if i == a.tagCursor {
-				cursor = ui.CursorStyle.Render("  ▸ ")
+				cursor = ui.CursorStyle.Render("  - ")
 			}
 			lines = append(lines, cursor+style.Render(a.labelKind.sigil()+label))
 		}
@@ -1408,7 +1434,7 @@ func (a App) renderInlineInput() string {
 			status = a.taskFile.Tasks[idx].Status
 		}
 	}
-	return ui.CursorStyle.Render(" ▸ ") + statusIcon(status) + "  " + a.input.View()
+	return ui.CursorStyle.Render(" - ") + statusIcon(status) + "   " + a.input.View()
 }
 
 // spliceInlineInput puts the editor into the rendered list: over the task

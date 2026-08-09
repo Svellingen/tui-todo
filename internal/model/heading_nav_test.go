@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// cursorGlyph is what marks the selected row in the gutter.
+const cursorGlyph = "-"
+
 const headingFixture = "# Top\n" +
 	"- [ ] top task\n" +
 	"## Alpha\n" +
@@ -26,6 +29,8 @@ func (m TaskListModel) cursorKind() string {
 		return "heading:" + name
 	case itemTask:
 		return "task:" + m.taskFile.Tasks[m.items[m.cursor].taskIndex].Title
+	case itemBlockLine:
+		return "block"
 	default:
 		return "blank"
 	}
@@ -318,7 +323,7 @@ func TestHeadingShowsCursor(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(row, "▸") {
+	if !strings.Contains(row, cursorGlyph) {
 		t.Errorf("expected a cursor on the selected heading, got %q", row)
 	}
 	if !strings.Contains(row, "Alpha") {
@@ -328,7 +333,7 @@ func TestHeadingShowsCursor(t *testing.T) {
 	// Exactly one row carries the cursor.
 	count := 0
 	for _, l := range lines {
-		if strings.Contains(l, "▸") {
+		if strings.Contains(l, cursorGlyph) {
 			count++
 		}
 	}

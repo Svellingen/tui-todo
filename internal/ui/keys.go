@@ -12,9 +12,10 @@ const (
 	KeySectionUp   = "K"
 	KeySectionDown = "J"
 
-	// Same jump, on the keys most people reach for.
-	KeySectionNext = "tab"
-	KeySectionPrev = "shift+tab"
+	// Enter folds one task's block, tab folds them all. Enter is matched on
+	// key type in the handler rather than by name, so it has no constant here.
+	// Section jumping lives on J / K and the ctrl pairs.
+	KeyToggleExpandAll = "tab"
 
 	// vim-style paging. KeyTop is a prefix: pressed twice it jumps to the top.
 	KeyTop      = "g"

@@ -165,33 +165,36 @@ func TestClipLinesClampsOutOfRangeOffset(t *testing.T) {
 	}
 }
 
-// Enter is a second way to start an add, alongside "a".
-func TestEnterStartsAnAdd(t *testing.T) {
-	a := newInlineApp(t)
-	a = moveTo(t, a, "task:first")
+// Enter folds the selected task's block; adding is on "a" alone.
+func TestEnterFoldsTheBlock(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  a note\n- [ ] plain\n")
+	a = moveTo(t, a, "task:parent")
 
 	next, _ := a.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
 	got := next.(App)
 
-	if got.mode != modeInput {
-		t.Fatal("expected Enter to open the editor")
+	if got.mode == modeInput {
+		t.Error("Enter should no longer open the add editor")
 	}
-	if got.input.Mode() != inputAdd {
-		t.Errorf("expected an add, got mode %d", got.input.Mode())
+	if !got.list.expanded[0] {
+		t.Error("expected Enter to fold the block open")
 	}
-	if got.inputAnchorItem != a.list.Cursor() {
-		t.Errorf("expected the anchor on the selected item, got %d", got.inputAnchorItem)
+
+	next, _ = got.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if next.(App).list.expanded[0] {
+		t.Error("expected Enter again to fold it shut")
 	}
 }
 
 // The letters "enter" arriving as one message are text, not the Enter key, so
-// they must not open the editor from the list.
-func TestTypingEnterInNormalModeDoesNotAdd(t *testing.T) {
-	a := newInlineApp(t)
+// they must not act as it from the list.
+func TestTypingEnterInNormalModeIsInert(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  a note\n")
+	a = moveTo(t, a, "task:parent")
 
 	next, _ := a.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("enter")})
-	if next.(App).mode == modeInput {
-		t.Error("a run of runes spelling \"enter\" should not open the editor")
+	if next.(App).list.expanded[0] {
+		t.Error("a run of runes spelling \"enter\" should not fold anything")
 	}
 }
 

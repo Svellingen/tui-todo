@@ -21,7 +21,8 @@ func helpContent() string {
 	}{
 		{"Navigation", []ui.HelpItem{
 			{"j / k, ↓ / ↑", "Move down / up"},
-			{"tab / S-tab", "Select next / prev heading (or J / K)"},
+			{"Enter / tab", "Fold one block / all blocks"},
+			{"J / K", "Select next / prev heading"},
 			{"ctrl+j/ctrl+k", "Select next / prev ## heading only"},
 			{"ctrl+h/ctrl+l", "Select parent / child heading"},
 			{"ctrl+e", "Heading popup: jump to one"},
@@ -32,7 +33,7 @@ func helpContent() string {
 			{"alt+J / alt+K", "Move task to next / prev heading"},
 		}},
 		{"Actions", []ui.HelpItem{
-			{"a / Enter", "Add task below the selection"},
+			{"a", "Add task below the selection"},
 			{"e", "Edit task title"},
 			{"d", "Toggle done"},
 			{"x", "Delete task, or heading + contents"},

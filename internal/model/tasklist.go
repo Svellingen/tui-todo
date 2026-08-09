@@ -16,6 +16,8 @@ const (
 	itemSection itemType = iota
 	itemTask
 	itemBlank
+	// itemBlockLine is a note or subtask inside an expanded task's block.
+	itemBlockLine
 )
 
 type item struct {
@@ -25,6 +27,9 @@ type item struct {
 	// addressed by it, since two headings can share the same text.
 	lineIndex int
 	taskIndex int
+	// blockIndex is the position within the parent task's block, for
+	// itemBlockLine only.
+	blockIndex int
 }
 
 type statusFilter int
@@ -49,6 +54,10 @@ type TaskListModel struct {
 	contextFilter string
 	// hideCursor suppresses the row marker while an inline editor is open.
 	hideCursor bool
+
+	// expanded holds the task indices whose blocks are shown. Tasks start
+	// collapsed, so a long file stays scannable.
+	expanded map[int]bool
 
 	// focusActive narrows the list to one heading's subtree; focusLine is that
 	// heading's index in TaskFile.Lines. A bool rather than a sentinel so the
@@ -75,6 +84,16 @@ func (m *TaskListModel) rebuildItems() {
 		case storage.LineTask:
 			if m.taskVisible(line.TaskIndex) {
 				m.items = append(m.items, item{kind: itemTask, lineIndex: li, taskIndex: line.TaskIndex})
+				if m.expanded[line.TaskIndex] {
+					for bi := range m.taskFile.Tasks[line.TaskIndex].Block {
+						m.items = append(m.items, item{
+							kind:       itemBlockLine,
+							lineIndex:  li,
+							taskIndex:  line.TaskIndex,
+							blockIndex: bi,
+						})
+					}
+				}
 			}
 		case storage.LineText:
 			m.items = append(m.items, item{kind: itemBlank, lineIndex: li})
@@ -88,18 +107,9 @@ func (m *TaskListModel) rebuildItems() {
 // RefreshOrder rebuilds the item list after the underlying task order changed,
 // leaving the cursor on the task it was already on.
 func (m *TaskListModel) RefreshOrder() {
-	selected := m.SelectedTaskIndex()
+	anchor := m.captureCursor()
 	m.rebuildItems()
-	if selected < 0 {
-		return
-	}
-	for i, it := range m.items {
-		if it.kind == itemTask && it.taskIndex == selected {
-			m.cursor = i
-			m.adjustScroll()
-			return
-		}
-	}
+	m.restoreCursor(anchor)
 }
 
 // Reload swaps in freshly parsed content, keeping the active filters and
@@ -246,9 +256,15 @@ func (m *TaskListModel) moveToPrevTask(pos int) {
 	}
 }
 
+// selectable reports whether the cursor may land on an item.
+func (m TaskListModel) selectable(i int) bool {
+	k := m.items[i].kind
+	return k == itemTask || k == itemBlockLine
+}
+
 func (m *TaskListModel) MoveDown() {
 	for i := m.cursor + 1; i < len(m.items); i++ {
-		if m.items[i].kind == itemTask {
+		if m.selectable(i) {
 			m.cursor = i
 			m.adjustScroll()
 			return
@@ -258,7 +274,7 @@ func (m *TaskListModel) MoveDown() {
 
 func (m *TaskListModel) MoveUp() {
 	for i := m.cursor - 1; i >= 0; i-- {
-		if m.items[i].kind == itemTask {
+		if m.selectable(i) {
 			m.cursor = i
 			m.adjustScroll()
 			return
@@ -715,7 +731,7 @@ func (m TaskListModel) ProgressCounts() (done, total int) {
 func renderHeading(raw string, selected bool) string {
 	cursor := "   "
 	if selected {
-		cursor = ui.CursorStyle.Render(" ▸ ")
+		cursor = ui.CursorStyle.Render(" - ")
 	}
 
 	trimmed := strings.TrimSpace(raw)
@@ -773,6 +789,9 @@ func (m TaskListModel) buildLines() (lines []string, starts []int) {
 
 		case itemTask:
 			lines = append(lines, m.renderTask(it.taskIndex, i == m.cursor && !m.hideCursor))
+
+		case itemBlockLine:
+			lines = append(lines, m.renderBlockLine(it, i == m.cursor && !m.hideCursor))
 
 		case itemBlank:
 			// skip — we manage spacing ourselves
@@ -847,7 +866,7 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	// Cursor arrow
 	cursor := "   "
 	if selected {
-		cursor = ui.CursorStyle.Render(" ▸ ")
+		cursor = ui.CursorStyle.Render(" - ")
 	}
 
 	// Status icon
@@ -907,8 +926,19 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 		title = ui.SelectedTask.Render(title)
 	}
 
+	// The fold marker sits in a column between the icon and the title, so
+	// titles line up whether or not a task has a block.
+	fold := " "
+	if len(t.Block) > 0 {
+		glyph := "▸"
+		if m.expanded[taskIdx] {
+			glyph = "▾"
+		}
+		fold = ui.BlockMarker.Render(glyph)
+	}
+
 	// Assemble
-	line := cursor + icon + "  "
+	line := cursor + icon + " " + fold + " "
 	if prio != "" {
 		line += prio + " "
 	}
@@ -920,15 +950,31 @@ func (m TaskListModel) renderTask(taskIdx int, selected bool) string {
 	return line
 }
 
+// SelectedTaskItem returns the task the cursor is on, which may be a subtask
+// inside an expanded block. Actions that mutate a task in place go through
+// this, so they work on subtasks without knowing about blocks.
+//
+// SelectedTaskIndex stays -1 on a block line: operations addressed by task
+// index -- moving, deleting, anchoring an add -- are for top-level tasks.
 func (m TaskListModel) SelectedTaskItem() *task.Task {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
 		return nil
 	}
 	it := m.items[m.cursor]
-	if it.kind != itemTask || it.taskIndex < 0 || it.taskIndex >= len(m.taskFile.Tasks) {
+	if it.taskIndex < 0 || it.taskIndex >= len(m.taskFile.Tasks) {
 		return nil
 	}
-	return &m.taskFile.Tasks[it.taskIndex]
+
+	switch it.kind {
+	case itemTask:
+		return &m.taskFile.Tasks[it.taskIndex]
+	case itemBlockLine:
+		block := m.taskFile.Tasks[it.taskIndex].Block
+		if it.blockIndex >= 0 && it.blockIndex < len(block) {
+			return block[it.blockIndex].Subtask
+		}
+	}
+	return nil
 }
 
 func (m TaskListModel) SelectedTaskIndex() int {
@@ -1053,10 +1099,12 @@ func (m TaskListModel) FocusName() string {
 // after the item list is rebuilt. Headings are tracked by line, tasks by task
 // index, since neither survives as a plain item position.
 type cursorAnchor struct {
-	valid     bool
-	isSection bool
-	lineIndex int
-	taskIndex int
+	valid      bool
+	isSection  bool
+	isBlock    bool
+	lineIndex  int
+	taskIndex  int
+	blockIndex int
 }
 
 func (m TaskListModel) captureCursor() cursorAnchor {
@@ -1065,10 +1113,12 @@ func (m TaskListModel) captureCursor() cursorAnchor {
 	}
 	it := m.items[m.cursor]
 	return cursorAnchor{
-		valid:     it.kind != itemBlank,
-		isSection: it.kind == itemSection,
-		lineIndex: it.lineIndex,
-		taskIndex: it.taskIndex,
+		valid:      it.kind != itemBlank,
+		isSection:  it.kind == itemSection,
+		isBlock:    it.kind == itemBlockLine,
+		lineIndex:  it.lineIndex,
+		taskIndex:  it.taskIndex,
+		blockIndex: it.blockIndex,
 	}
 }
 
@@ -1079,16 +1129,24 @@ func (m *TaskListModel) restoreCursor(a cursorAnchor) bool {
 		return false
 	}
 	for i, it := range m.items {
-		if a.isSection && it.kind == itemSection && it.lineIndex == a.lineIndex {
-			m.cursor = i
-			m.adjustScroll()
-			return true
+		switch {
+		case a.isSection:
+			if it.kind != itemSection || it.lineIndex != a.lineIndex {
+				continue
+			}
+		case a.isBlock:
+			if it.kind != itemBlockLine || it.taskIndex != a.taskIndex ||
+				it.blockIndex != a.blockIndex {
+				continue
+			}
+		default:
+			if it.kind != itemTask || it.taskIndex != a.taskIndex {
+				continue
+			}
 		}
-		if !a.isSection && it.kind == itemTask && it.taskIndex == a.taskIndex {
-			m.cursor = i
-			m.adjustScroll()
-			return true
-		}
+		m.cursor = i
+		m.adjustScroll()
+		return true
 	}
 	return false
 }
@@ -1109,4 +1167,162 @@ func (m *TaskListModel) withPreservedCursor(change func()) {
 	if !m.restoreCursor(anchor) {
 		m.SelectItemNear(pos)
 	}
+}
+
+// renderBlockLine draws one line of an expanded block, indented under its
+// task. Subtasks keep a checkbox of their own; notes are plain text.
+func (m TaskListModel) renderBlockLine(it item, selected bool) string {
+	if it.taskIndex < 0 || it.taskIndex >= len(m.taskFile.Tasks) {
+		return ""
+	}
+	block := m.taskFile.Tasks[it.taskIndex].Block
+	if it.blockIndex < 0 || it.blockIndex >= len(block) {
+		return ""
+	}
+	b := block[it.blockIndex]
+
+	// The gutter is pushed two columns in for a block line, so the cursor sits
+	// under the parent's bullet rather than out at the margin. The prefix is
+	// the same width either way, keeping block content aligned.
+	cursor := "   "
+	if selected {
+		cursor = ui.CursorStyle.Render(" - ")
+	}
+	prefix := "  " + cursor + "  "
+
+	if b.Subtask == nil {
+		return prefix + ui.BlockNote.Render(b.Note)
+	}
+
+	sub := *b.Subtask
+	text := sub.Title
+	if marker := storage.PriorityMarker(sub.Priority); marker != "" {
+		text = marker + " " + text
+	}
+	if sub.Status == task.StatusDone {
+		text = ui.DoneTask.Render(text)
+	} else if selected {
+		text = ui.SelectedTask.Render(text)
+	}
+
+	row := prefix + statusIcon(sub.Status) + "  " + text
+	for _, tag := range sub.Tags {
+		row += " " + ui.Tag.Render("+"+tag)
+	}
+	for _, ctx := range sub.Contexts {
+		row += " " + ui.Context.Render("@"+ctx)
+	}
+	return row
+}
+
+// ToggleExpand folds the selected task's block open or shut. From a block line
+// it folds the parent, so tab always closes what you are inside.
+func (m *TaskListModel) ToggleExpand() bool {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return false
+	}
+	it := m.items[m.cursor]
+	if it.kind != itemTask && it.kind != itemBlockLine {
+		return false
+	}
+	if len(m.taskFile.Tasks[it.taskIndex].Block) == 0 {
+		return false
+	}
+
+	if m.expanded == nil {
+		m.expanded = make(map[int]bool)
+	}
+	idx := it.taskIndex
+	m.expanded[idx] = !m.expanded[idx]
+
+	m.rebuildItems()
+	m.SelectTask(idx)
+	return true
+}
+
+// SelectedSubtask returns the subtask under the cursor, or nil when the cursor
+// is not on one.
+func (m TaskListModel) SelectedSubtask() *task.Task {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return nil
+	}
+	it := m.items[m.cursor]
+	if it.kind != itemBlockLine {
+		return nil
+	}
+	block := m.taskFile.Tasks[it.taskIndex].Block
+	if it.blockIndex < 0 || it.blockIndex >= len(block) {
+		return nil
+	}
+	return block[it.blockIndex].Subtask
+}
+
+// SelectedBlockLine returns the parent task index and position of the block
+// line under the cursor, or (-1, -1).
+func (m TaskListModel) SelectedBlockLine() (taskIndex, blockIndex int) {
+	if m.cursor < 0 || m.cursor >= len(m.items) {
+		return -1, -1
+	}
+	it := m.items[m.cursor]
+	if it.kind != itemBlockLine {
+		return -1, -1
+	}
+	return it.taskIndex, it.blockIndex
+}
+
+// tasksWithBlocks lists the indices of tasks that have something to fold.
+func (m TaskListModel) tasksWithBlocks() []int {
+	var out []int
+	for i := range m.taskFile.Tasks {
+		if len(m.taskFile.Tasks[i].Block) > 0 {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// ToggleExpandAll folds every block shut when any is open, and opens them all
+// when none is. It reports whether there was anything to fold.
+func (m *TaskListModel) ToggleExpandAll() bool {
+	targets := m.tasksWithBlocks()
+	if len(targets) == 0 {
+		return false
+	}
+
+	anyOpen := false
+	for _, i := range targets {
+		if m.expanded[i] {
+			anyOpen = true
+			break
+		}
+	}
+
+	// Collapsing pulls block rows out from under the cursor, so remember the
+	// task one belonged to and fall back to it.
+	parent := -1
+	if m.cursor >= 0 && m.cursor < len(m.items) && m.items[m.cursor].kind == itemBlockLine {
+		parent = m.items[m.cursor].taskIndex
+	}
+
+	anchor := m.captureCursor()
+	pos := m.cursor
+
+	if anyOpen {
+		m.expanded = nil
+	} else {
+		m.expanded = make(map[int]bool, len(targets))
+		for _, i := range targets {
+			m.expanded[i] = true
+		}
+	}
+	m.rebuildItems()
+
+	switch {
+	case m.restoreCursor(anchor):
+	case parent >= 0:
+		m.SelectTask(parent)
+	default:
+		m.SelectItemNear(pos)
+	}
+	return true
 }

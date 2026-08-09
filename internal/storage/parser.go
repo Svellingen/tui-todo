@@ -86,7 +86,8 @@ func (p *Parser) Parse(content string) (*TaskFile, error) {
 
 	currentStatus := task.StatusTodo // default status if no section header seen
 
-	for i, raw := range rawLines {
+	for i := 0; i < len(rawLines); i++ {
+		raw := rawLines[i]
 		lineNum := i + 1
 		line := Line{
 			Raw:       raw,
@@ -113,6 +114,13 @@ func (p *Parser) Parse(content string) (*TaskFile, error) {
 
 		// Check for task checkbox line
 		if t, ok := parseTaskLine(trimmed, currentStatus, lineNum, raw); ok {
+			// The indented lines beneath it belong to it, and are consumed
+			// here rather than becoming Lines of their own. That is what makes
+			// a block travel with its task through sorting and moves.
+			block, consumed := parseBlock(rawLines[i+1:])
+			t.Block = block
+			i += consumed
+
 			line.Type = LineTask
 			line.TaskIndex = len(tf.Tasks)
 			tf.Tasks = append(tf.Tasks, t)
@@ -126,6 +134,31 @@ func (p *Parser) Parse(content string) (*TaskFile, error) {
 	}
 
 	return tf, nil
+}
+
+// parseBlock consumes the run of indented lines beneath a task.
+//
+// It stops at the first line that is blank or not indented. Depth beyond the
+// first level is not modelled: a deeply indented line is read as an ordinary
+// block line and written back at two spaces.
+func parseBlock(rest []string) (block []task.BlockLine, consumed int) {
+	for _, raw := range rest {
+		if strings.TrimSpace(raw) == "" {
+			break
+		}
+		if !strings.HasPrefix(raw, " ") && !strings.HasPrefix(raw, "\t") {
+			break
+		}
+
+		text := strings.TrimSpace(raw)
+		if sub, ok := parseTaskLine(text, task.StatusTodo, 0, raw); ok {
+			block = append(block, task.BlockLine{Subtask: &sub})
+		} else {
+			block = append(block, task.BlockLine{Note: text})
+		}
+		consumed++
+	}
+	return block, consumed
 }
 
 // sectionNameToStatus maps section header names to task statuses.

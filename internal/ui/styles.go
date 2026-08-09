@@ -39,6 +39,8 @@ var (
 	PriorityMedium = lipgloss.NewStyle().Foreground(ColorYellow)
 	Tag            = lipgloss.NewStyle().Foreground(ColorMauve)
 	Context        = lipgloss.NewStyle().Foreground(ColorRose)
+	BlockMarker    = lipgloss.NewStyle().Foreground(ColorGray)
+	BlockNote      = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
 	DueStyle       = lipgloss.NewStyle().Foreground(ColorGray).Italic(true)
 	DoneTask       = lipgloss.NewStyle().Foreground(ColorFaintGray).Strikethrough(true)
 	DoneMeta       = lipgloss.NewStyle().Foreground(ColorFaintGray)

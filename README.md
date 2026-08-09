@@ -52,12 +52,13 @@ todo
 |-----|--------|
 | `j` / `k` | Move down / up |
 | `↓` / `↑` | Move down / up |
-| `tab` / `shift+tab` | Select the next / previous heading, any level |
 | `ctrl+j` / `ctrl+k` | Select the next / previous `##` heading, skipping deeper ones |
 | `ctrl+h` / `ctrl+l` | Select the parent / first child heading |
 | `ctrl+e` | Heading popup — filter and jump to any heading |
 | `m` | Heading popup — move the selected task to any heading |
-| `J` / `K` | Same jump, vim-style |
+| `J` / `K` | Select the next / previous heading, any level |
+| `Enter` | Fold the selected task's block open or shut |
+| `tab` | Fold every block — shuts them all if any is open, else opens them all |
 | `gg` / `G` | Jump to the first / last task |
 | `ctrl+d` / `ctrl+u` | Page down / up |
 | `alt+j` / `alt+k` | Move the selected task down / up within its sort group |
@@ -67,7 +68,7 @@ todo
 
 | Key | Action |
 |-----|--------|
-| `a` / `Enter` | Add a task inline on the next row — below the current task, or under the current heading |
+| `a` | Add a task inline on the next row — below the current task, or under the current heading |
 | `e` | Edit the task title inline, on its own row |
 | `d` | Toggle done |
 | `x` | Delete the task, or the selected heading and everything under it |
@@ -159,11 +160,11 @@ well as top-level ones.
 
 ### Selecting headings
 
-`tab` and `shift+tab` select headings themselves; `j` and `k` step over them
-between tasks. `ctrl+j` and `ctrl+k` do the same as `tab`, but stop only at
+`J` and `K` select headings themselves; `j` and `k` step over them between
+tasks. `ctrl+j` and `ctrl+k` do the same as `tab`, but stop only at
 `##` headings — handy for moving between major sections in a file with a lot
 of sub-headings. A `#` title is a different level, so it is not one of their
-stops; `tab` still reaches it.
+stops; `J` and `K` still reach it.
 
 `ctrl+h` and `ctrl+l` move across levels rather than along one. `ctrl+l`
 descends to the first sub-heading nested under the current one, and `ctrl+h`
@@ -281,6 +282,56 @@ key and colour — tags in mauve, contexts in rose:
 pressing the same key again clears that filter. The two compose, so `+work`
 and `@home` together shows only tasks carrying both. Either can also be typed
 inline while adding or editing a task.
+
+## Task Blocks
+
+Lines indented beneath a task belong to that task:
+
+```markdown
+- [ ] deploy the thing
+  check the logs first
+  - [ ] tag the release
+  - [x] update the changelog
+```
+
+In the list a task with a block carries a marker in its own column, between
+the status bullet and the title, so titles stay aligned either way. The cursor
+is the `-` in the left gutter:
+
+```
+   ○   a task with nothing under it
+ - ○ ▸ a task with a block, folded
+   ○ ▾ a task with a block, open
+   -   a note
+       ○  a subtask
+```
+
+On a block line the cursor sits two columns further in, under the parent's
+bullet.
+
+The block travels with its task — sorting, moving between headings, deleting
+and undo all carry it. `Enter` folds it open and shut. `tab` folds the whole file: if any block is
+open it shuts them all, otherwise it opens them all. Blocks start folded.
+
+While expanded, `j` and `k` walk into the block. A subtask behaves like a task
+for the things that act in place: `Space`, `ctrl+space`, `d`, `p` and `P` all
+apply to the subtask under the cursor rather than its parent. `x` on a block
+line removes just that line. Subtasks keep the order you wrote them in — only
+top-level tasks are sorted.
+
+Blocks are one level deep. Anything more deeply indented in the source is read
+as an ordinary block line and written back at two spaces, so saving normalises
+the file:
+
+```markdown
+- [ ] task            - [ ] task
+      a stray note      a stray note
+  - [ ] sub       →     - [ ] sub
+        - [ ] deep      - [ ] deep
+```
+
+A blank line ends a block; what follows belongs to the file rather than the
+task.
 
 ## Sorting
 

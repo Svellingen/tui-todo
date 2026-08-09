@@ -20,6 +20,24 @@ const (
 	StatusDone
 )
 
+// BlockLine is one indented line beneath a task: either a subtask or a note.
+// Blocks are one level deep -- anything more deeply indented in the source is
+// flattened into this level on save.
+type BlockLine struct {
+	// Subtask is set when the line is a checkbox item; otherwise the line is
+	// prose and Note holds its text.
+	Subtask *Task
+	Note    string
+}
+
+// Text returns what the line reads as, whichever kind it is.
+func (b BlockLine) Text() string {
+	if b.Subtask != nil {
+		return b.Subtask.Title
+	}
+	return b.Note
+}
+
 type Task struct {
 	Title       string
 	Status      Status
@@ -31,4 +49,6 @@ type Task struct {
 	DoneDate    *time.Time
 	Line        int
 	RawLine     string
+	// Block holds the indented lines that belong to this task.
+	Block []BlockLine
 }

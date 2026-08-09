@@ -48,8 +48,26 @@ func PriorityMarker(p task.Priority) string {
 	}
 }
 
-// formatTask renders a task as a markdown checkbox line.
+// formatTask renders a task and its block: the checkbox line, then each block
+// line indented by two spaces. Whatever depth the source used, the block is
+// written back flat at one level.
 func formatTask(t task.Task) string {
+	var sb strings.Builder
+	sb.WriteString(formatTaskLine(t))
+
+	for _, b := range t.Block {
+		sb.WriteString("\n  ")
+		if b.Subtask != nil {
+			sb.WriteString(formatTaskLine(*b.Subtask))
+			continue
+		}
+		sb.WriteString(b.Note)
+	}
+	return sb.String()
+}
+
+// formatTaskLine renders just the checkbox line for a task.
+func formatTaskLine(t task.Task) string {
 	var sb strings.Builder
 
 	// Checkbox
