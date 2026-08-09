@@ -40,6 +40,7 @@ func NewTaskInput() TaskInputModel {
 func (m *TaskInputModel) StartAdd() {
 	m.mode = inputAdd
 	m.editIndex = -1
+	m.input.Placeholder = "Task title..."
 	m.input.SetValue("")
 	m.input.Focus()
 }
@@ -48,6 +49,7 @@ func (m *TaskInputModel) StartAdd() {
 func (m *TaskInputModel) StartEdit(taskIndex int, currentTitle string) {
 	m.mode = inputEdit
 	m.editIndex = taskIndex
+	m.input.Placeholder = "Task title..."
 	m.input.SetValue(currentTitle)
 	m.input.CursorEnd()
 	m.input.Focus()
@@ -69,6 +71,12 @@ func (m *TaskInputModel) StartTag() {
 	m.input.SetValue("")
 	m.input.Placeholder = "Tag name..."
 	m.input.Focus()
+}
+
+// SetNotePrompt marks the current edit as a note rather than a task, so the
+// placeholder does not ask for a title.
+func (m *TaskInputModel) SetNotePrompt() {
+	m.input.Placeholder = "Note..."
 }
 
 // StartContext begins the add-context flow.

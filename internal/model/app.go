@@ -84,6 +84,9 @@ type undoEntry struct {
 	content string
 	desc    string
 	cursor  int
+	// anchor identifies the item the cursor was on, so undo can find it again
+	// even though the restored list is rebuilt from scratch.
+	anchor cursorAnchor
 }
 
 type flashMsg struct{}
@@ -146,6 +149,8 @@ type App struct {
 type blockTarget struct {
 	parent int
 	index  int
+	// note says the in-flight add makes a note rather than a subtask.
+	note bool
 }
 
 func noBlockTarget() blockTarget { return blockTarget{parent: -1, index: -1} }
@@ -272,7 +277,12 @@ func (a *App) pushUndoContent(content, desc string) {
 
 // snapshot pairs content with the cursor position it belongs to.
 func (a App) snapshot(content, desc string) undoEntry {
-	return undoEntry{content: content, desc: desc, cursor: a.list.Cursor()}
+	return undoEntry{
+		content: content,
+		desc:    desc,
+		cursor:  a.list.Cursor(),
+		anchor:  a.list.captureCursor(),
+	}
 }
 
 // restore swaps in a snapshot's content and returns the cursor to where it was
@@ -285,7 +295,16 @@ func (a *App) restore(entry undoEntry) error {
 	a.taskFile = tf
 	a.list = NewTaskListModel(a.taskFile)
 	a.updateListSize()
-	a.list.SelectItemNear(entry.cursor)
+
+	// The rebuilt list is folded, so a block line is not on it yet. Open its
+	// task first, then aim for the exact item; failing that, fall back to
+	// wherever the old position now lands.
+	if entry.anchor.isBlock {
+		a.list.ExpandTask(entry.anchor.taskIndex)
+	}
+	if !a.list.restoreCursor(entry.anchor) {
+		a.list.SelectItemNear(entry.cursor)
+	}
 	return nil
 }
 
@@ -339,8 +358,13 @@ func (a *App) normalizeOrder() tea.Cmd {
 	return a.save()
 }
 
-// moveTask shifts the selected task within its sort group.
+// moveTask shifts the selected task within its sort group, or the selected
+// block line within its block.
 func (a App) moveTask(delta int) (tea.Model, tea.Cmd) {
+	if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+		return a.moveBlockLine(parent, index, delta)
+	}
+
 	idx := a.list.SelectedTaskIndex()
 	if idx < 0 {
 		return a, nil
@@ -355,6 +379,32 @@ func (a App) moveTask(delta int) (tea.Model, tea.Cmd) {
 	a.pushUndoContent(before, "move task")
 	a.list.RefreshOrder()
 	return a, a.save()
+}
+
+// moveBlockLine shifts a subtask or note within its own block. Block lines
+// keep their written order rather than being sorted, so there are no groups to
+// stay inside -- only the ends of the block, where the move is refused rather
+// than wrapping.
+func (a App) moveBlockLine(parent, index, delta int) (tea.Model, tea.Cmd) {
+	if parent < 0 || parent >= len(a.taskFile.Tasks) {
+		return a, nil
+	}
+	block := a.taskFile.Tasks[parent].Block
+	to := index + delta
+	if index < 0 || index >= len(block) || to < 0 || to >= len(block) {
+		return a, nil
+	}
+
+	a.pushUndo("move block line")
+
+	moved := make([]task.BlockLine, len(block))
+	copy(moved, block)
+	moved[index], moved[to] = moved[to], moved[index]
+	a.taskFile.Tasks[parent].Block = moved
+
+	cmd := a.save()
+	a.list.SelectBlockLine(parent, to)
+	return a, cmd
 }
 
 func flash(msg string) (string, tea.Cmd) {
@@ -648,6 +698,14 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a.startAddSubtask(parent, index+1)
 		}
 		return a.startAdd()
+	case ui.KeyAddNote:
+		if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+			return a.startAddNote(parent, index+1)
+		}
+		if idx := a.list.SelectedTaskIndex(); idx >= 0 {
+			return a.startAddNote(idx, len(a.taskFile.Tasks[idx].Block))
+		}
+		return a, nil
 	case ui.KeyAddSubtask:
 		if idx := a.list.SelectedTaskIndex(); idx >= 0 {
 			return a.startAddSubtask(idx, len(a.taskFile.Tasks[idx].Block))
@@ -858,6 +916,15 @@ func (a App) startAdd() (tea.Model, tea.Cmd) {
 // given position. The block is unfolded first, since the editor is drawn in
 // it.
 func (a App) startAddSubtask(parent, at int) (tea.Model, tea.Cmd) {
+	return a.startAddBlockLine(parent, at, false)
+}
+
+// startAddNote is the same, for a note instead of a subtask.
+func (a App) startAddNote(parent, at int) (tea.Model, tea.Cmd) {
+	return a.startAddBlockLine(parent, at, true)
+}
+
+func (a App) startAddBlockLine(parent, at int, note bool) (tea.Model, tea.Cmd) {
 	if parent < 0 || parent >= len(a.taskFile.Tasks) {
 		return a, nil
 	}
@@ -876,10 +943,13 @@ func (a App) startAddSubtask(parent, at int) (tea.Model, tea.Cmd) {
 	}
 
 	a.mode = modeInput
-	a.inputBlock = blockTarget{parent: parent, index: at}
+	a.inputBlock = blockTarget{parent: parent, index: at, note: note}
 	a.inputAnchorItem = anchor
 	a.list.SetHideCursor(true)
 	a.input.StartAdd()
+	if note {
+		a.input.SetNotePrompt()
+	}
 	a.updateListSize()
 	return a, nil
 }
@@ -895,8 +965,9 @@ func (a App) startEditBlockLine(parent, index int) (tea.Model, tea.Cmd) {
 	}
 
 	current := block[index].Note
-	if sub := block[index].Subtask; sub != nil {
-		current = sub.Title
+	note := block[index].Subtask == nil
+	if !note {
+		current = block[index].Subtask.Title
 	}
 
 	a.mode = modeInput
@@ -904,6 +975,9 @@ func (a App) startEditBlockLine(parent, index int) (tea.Model, tea.Cmd) {
 	a.inputAnchorItem = a.list.Cursor()
 	a.list.SetHideCursor(true)
 	a.input.StartEdit(parent, current)
+	if note {
+		a.input.SetNotePrompt()
+	}
 	a.updateListSize()
 	return a, nil
 }
@@ -1028,6 +1102,18 @@ func (a App) commitBlockAdd(value string) (tea.Model, tea.Cmd) {
 	if target.parent < 0 || target.parent >= len(a.taskFile.Tasks) {
 		return a, nil
 	}
+	if target.note {
+		a.pushUndo("add note")
+		block := a.taskFile.Tasks[target.parent].Block
+		at := min(max(target.index, 0), len(block))
+		block = append(block[:at], append([]task.BlockLine{{Note: value}}, block[at:]...)...)
+		a.taskFile.Tasks[target.parent].Block = block
+
+		cmd := a.save()
+		a.list.SelectBlockLine(target.parent, at)
+		return a, cmd
+	}
+
 	a.pushUndo("add subtask")
 
 	sub, ok := storage.ParseTaskText(value)
@@ -1359,7 +1445,103 @@ func prevStatus(s task.Status) task.Status {
 	return task.StatusTodo
 }
 
+// blockScale is the four-step scale a block line moves through. A note sits
+// below todo: pressing forward on one turns it into a subtask, and stepping
+// back off todo turns a subtask into a note.
+//
+// Space walks it forward and wraps, ctrl+space walks it back and stops at a
+// note -- the same shapes the top-level status keys have.
+const (
+	blockNote = iota
+	blockTodo
+	blockInProgress
+	blockDone
+	blockStates
+)
+
+// blockLineState reads where a block line sits on the scale.
+func blockLineState(b task.BlockLine) int {
+	if b.Subtask == nil {
+		return blockNote
+	}
+	switch b.Subtask.Status {
+	case task.StatusInProgress:
+		return blockInProgress
+	case task.StatusDone:
+		return blockDone
+	default:
+		return blockTodo
+	}
+}
+
+// blockLineAt converts a block line to the given state, keeping as much of it
+// as the new state can hold.
+func blockLineAt(b task.BlockLine, state int) task.BlockLine {
+	if state == blockNote {
+		if b.Subtask == nil {
+			return b
+		}
+		// A note has no status, but the rest of the line survives.
+		return task.BlockLine{Note: storage.TaskText(*b.Subtask)}
+	}
+
+	status := task.StatusTodo
+	switch state {
+	case blockInProgress:
+		status = task.StatusInProgress
+	case blockDone:
+		status = task.StatusDone
+	}
+
+	if b.Subtask != nil {
+		sub := *b.Subtask
+		sub.Status = status
+		return task.BlockLine{Subtask: &sub}
+	}
+
+	// Promoting a note: read its text the way a task title is read, so any
+	// markers it already carries are picked up.
+	meta := storage.ParseMetadata(b.Note)
+	return task.BlockLine{Subtask: &task.Task{
+		Title:    meta.Title,
+		Status:   status,
+		Priority: meta.Priority,
+		Tags:     meta.Tags,
+		Contexts: meta.Contexts,
+		DueDate:  meta.DueDate,
+	}}
+}
+
+// cycleBlockLine steps a block line along the scale. dir is +1 to move
+// forward, wrapping, and -1 to move back, stopping at a note.
+func (a App) cycleBlockLine(parent, index, dir int) (tea.Model, tea.Cmd) {
+	block := a.taskFile.Tasks[parent].Block
+	if index < 0 || index >= len(block) {
+		return a, nil
+	}
+
+	state := blockLineState(block[index])
+	next := state + dir
+	switch {
+	case dir > 0:
+		next = (next + blockStates) % blockStates
+	case next < blockNote:
+		return a, nil // already a note; nothing further back
+	}
+
+	a.pushUndo("cycle status")
+	block[index] = blockLineAt(block[index], next)
+
+	cmd := a.save()
+	a.list.SelectBlockLine(parent, index)
+	return a, cmd
+}
+
 func (a App) cycleStatus() (tea.Model, tea.Cmd) {
+	if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+		return a.cycleBlockLine(parent, index, 1)
+	}
+
 	t := a.list.SelectedTaskItem()
 	if t == nil {
 		return a, nil
@@ -1372,6 +1554,10 @@ func (a App) cycleStatus() (tea.Model, tea.Cmd) {
 // cycleStatusBack walks a task back towards todo: done to in-progress,
 // in-progress to todo, and nothing at all on a task already at todo.
 func (a App) cycleStatusBack() (tea.Model, tea.Cmd) {
+	if parent, index := a.list.SelectedBlockLine(); parent >= 0 {
+		return a.cycleBlockLine(parent, index, -1)
+	}
+
 	t := a.list.SelectedTaskItem()
 	if t == nil {
 		return a, nil
@@ -1615,16 +1801,25 @@ func (a App) renderInlineInput() string {
 	// A block editor is drawn at the block's indentation, so the row it stands
 	// in for keeps its place.
 	if a.inputBlock.active() {
+		// Editing a note shows no bullet: a note is not a task, and drawing
+		// one made it read like a subtask being created.
+		note := a.inputBlock.note
 		if a.input.Mode() == inputEdit {
 			block := a.taskFile.Tasks[a.inputBlock.parent].Block
 			if a.inputBlock.index < len(block) {
 				if sub := block[a.inputBlock.index].Subtask; sub != nil {
 					status = sub.Status
+				} else {
+					note = true
 				}
 			}
 		}
-		return "  " + ui.CursorStyle.Render(" - ") + "  " +
-			statusIcon(status) + "  " + a.input.View()
+
+		prefix := "  " + ui.CursorStyle.Render(" - ") + "  "
+		if note {
+			return prefix + a.input.View()
+		}
+		return prefix + statusIcon(status) + "  " + a.input.View()
 	}
 
 	if a.input.Mode() == inputEdit {

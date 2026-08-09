@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/macone/todo-cli/internal/task"
 )
@@ -260,5 +261,122 @@ func TestSubtaskEditorStaysInsideTheBlock(t *testing.T) {
 	}
 	if editorRow <= starts[a.list.ItemForBlockLine(0, 0)] {
 		t.Error("expected the editor below the line it follows")
+	}
+}
+
+// A note is not a task, so editing one shows no bullet -- otherwise it reads
+// as a subtask being created.
+func TestNoteEditorHasNoBullet(t *testing.T) {
+	a := newDeleteApp(t, subtaskFixture)
+	a = moveTo(t, a, "task:parent")
+	a.list.ToggleExpand()
+	a.list.MoveDown() // the note
+
+	next, _ := a.startEdit()
+	a = next.(App)
+
+	row := ansi.Strip(a.renderInlineInput())
+	for _, bullet := range []string{"○", "◐", "●"} {
+		if strings.Contains(row, bullet) {
+			t.Errorf("expected no bullet editing a note, got %q", row)
+		}
+	}
+	if !strings.Contains(row, "a note") {
+		t.Errorf("expected the note text, got %q", row)
+	}
+}
+
+// A subtask editor keeps its bullet, and the bullet reflects its status.
+func TestSubtaskEditorKeepsItsBullet(t *testing.T) {
+	a := newDeleteApp(t, subtaskFixture)
+	a = moveTo(t, a, "task:parent")
+	a.list.ToggleExpand()
+	a.list.MoveDown()
+	a.list.MoveDown() // the done subtask
+
+	next, _ := a.startEdit()
+	a = next.(App)
+
+	row := ansi.Strip(a.renderInlineInput())
+	if !strings.Contains(row, "●") {
+		t.Errorf("expected the done bullet, got %q", row)
+	}
+}
+
+// "n" adds a note to the selected task, appended to its block.
+func TestAddNoteToTask(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  - [ ] a subtask\n- [ ] other\n")
+	a = moveTo(t, a, "task:parent")
+
+	next, _ := a.startAddNote(0, len(a.taskFile.Tasks[0].Block))
+	a = next.(App)
+	if !a.list.expanded[0] {
+		t.Error("expected the block unfolded so the editor is visible")
+	}
+
+	a = typeRunes(a, "remember the milk")
+	next, _ = a.commitInput()
+	a = next.(App)
+
+	got := strings.Join(blockTexts(a, 0), ",")
+	if got != "sub:a subtask,note:remember the milk" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// On a block line it inserts directly after it, as "a" does for a subtask.
+func TestAddNoteAfterBlockLine(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  - [ ] a subtask\n")
+	a = moveTo(t, a, "task:parent")
+	a.list.ToggleExpand()
+	a.list.MoveDown()
+
+	parent, index := a.list.SelectedBlockLine()
+	next, _ := a.startAddNote(parent, index+1)
+	a = next.(App)
+	a = typeRunes(a, "inserted")
+	next, _ = a.commitInput()
+	a = next.(App)
+
+	got := strings.Join(blockTexts(a, 0), ",")
+	if got != "sub:a subtask,note:inserted" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// A note added this way is a real note, not a subtask whose text looks like
+// one, so it takes part in the four-state cycle.
+func TestAddedNoteIsANote(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  - [ ] a subtask\n")
+	a = moveTo(t, a, "task:parent")
+
+	next, _ := a.startAddNote(0, 0)
+	a = next.(App)
+	a = typeRunes(a, "- [ ] looks like a task")
+	next, _ = a.commitInput()
+	a = next.(App)
+
+	line := a.taskFile.Tasks[0].Block[0]
+	if line.Subtask != nil {
+		t.Errorf("expected a note even when the text looks like a task, got %+v", line)
+	}
+	if line.Note != "- [ ] looks like a task" {
+		t.Errorf("expected the text verbatim, got %q", line.Note)
+	}
+}
+
+// The note editor shows no bullet while adding, matching how a note renders.
+func TestAddNoteEditorHasNoBullet(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] parent\n  - [ ] a subtask\n")
+	a = moveTo(t, a, "task:parent")
+
+	next, _ := a.startAddNote(0, 0)
+	a = next.(App)
+
+	row := ansi.Strip(a.renderInlineInput())
+	for _, bullet := range []string{"○", "◐", "●"} {
+		if strings.Contains(row, bullet) {
+			t.Errorf("expected no bullet, got %q", row)
+		}
 	}
 }

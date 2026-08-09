@@ -58,7 +58,7 @@ func (tf *TaskFile) Span(lineIdx int) (span SectionSpan, ok bool) {
 }
 
 // DeleteSection removes a heading together with everything nested under it:
-// sub-headings, their tasks, and any prose in between.
+// sub-headings, their tasks, and anything else in between.
 func (tf *TaskFile) DeleteSection(lineIdx int) bool {
 	span, ok := tf.Span(lineIdx)
 	if !ok {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/macone/todo-cli/internal/storage"
 	"github.com/macone/todo-cli/internal/task"
 )
 
@@ -329,5 +330,151 @@ func TestBlockLineCursorIsIndented(t *testing.T) {
 	}
 	if ansi.StringWidth(selected[:7]) != ansi.StringWidth(other[:7]) {
 		t.Error("selected and unselected block lines should share a prefix width")
+	}
+}
+
+// selectBlock puts the cursor on a given line of a task's block.
+func selectBlock(t *testing.T, a App, parent, index int) App {
+	t.Helper()
+	a.list.ExpandTask(parent)
+	a.list.SelectBlockLine(parent, index)
+	if p, i := a.list.SelectedBlockLine(); p != parent || i != index {
+		t.Fatalf("expected the cursor at (%d,%d), got (%d,%d)", parent, index, p, i)
+	}
+	return a
+}
+
+// alt+j / alt+k reorder within the block, the way they reorder tasks.
+func TestMoveBlockLineWithinItsBlock(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 0) // the note, at the top
+
+	next, _ := a.moveTask(1)
+	a = next.(App)
+	if got := strings.Join(blockTexts(a, 0), ","); got != "sub:first step,note:a note,sub:second step" {
+		t.Errorf("after alt+j: got %q", got)
+	}
+
+	// The cursor rides along with the line it moved.
+	if p, i := a.list.SelectedBlockLine(); p != 0 || i != 1 {
+		t.Errorf("expected the cursor to follow to (0,1), got (%d,%d)", p, i)
+	}
+
+	next, _ = a.moveTask(-1)
+	a = next.(App)
+	if got := strings.Join(blockTexts(a, 0), ","); got != "note:a note,sub:first step,sub:second step" {
+		t.Errorf("after alt+k: got %q", got)
+	}
+}
+
+// Unlike tasks, block lines are not sorted, so a note and a done subtask can
+// be reordered past each other freely.
+func TestMoveBlockLineIgnoresStatus(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 2) // the done subtask, at the bottom
+
+	for range 2 {
+		next, _ := a.moveTask(-1)
+		a = next.(App)
+	}
+	if got := strings.Join(blockTexts(a, 0), ","); got != "sub:second step,note:a note,sub:first step" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// The move stops at the ends of the block rather than wrapping, and a refused
+// move leaves nothing on the undo stack.
+func TestMoveBlockLineStopsAtTheEdges(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 0)
+
+	depth := len(a.undoStack)
+	next, _ := a.moveTask(-1)
+	a = next.(App)
+	if got := strings.Join(blockTexts(a, 0), ","); got != "note:a note,sub:first step,sub:second step" {
+		t.Errorf("expected no wrap off the top, got %q", got)
+	}
+	if len(a.undoStack) != depth {
+		t.Error("a refused move should not be undoable")
+	}
+
+	a = selectBlock(t, a, 0, 2)
+	next, _ = a.moveTask(1)
+	a = next.(App)
+	if got := strings.Join(blockTexts(a, 0), ","); got != "note:a note,sub:first step,sub:second step" {
+		t.Errorf("expected no wrap off the bottom, got %q", got)
+	}
+}
+
+// A block line must not drag its parent task around the section.
+func TestMoveBlockLineLeavesTasksAlone(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	before := topLevelTitles(a)
+
+	a = selectBlock(t, a, 0, 0)
+	next, _ := a.moveTask(1)
+	a = next.(App)
+
+	if got := topLevelTitles(a); got != before {
+		t.Errorf("task order changed from %q to %q", before, got)
+	}
+}
+
+// The new order survives the round trip through the file.
+func TestMoveBlockLinePersists(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 0)
+	next, _ := a.moveTask(1)
+	a = next.(App)
+
+	reloaded, err := a.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.taskFile = reloaded
+	if got := strings.Join(blockTexts(a, 0), ","); got != "sub:first step,note:a note,sub:second step" {
+		t.Errorf("expected the reordered block on disk, got %q", got)
+	}
+}
+
+// Undo puts the block back the way it was.
+func TestMoveBlockLineUndo(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 0)
+	next, _ := a.moveTask(1)
+	a = next.(App)
+
+	next, _ = a.undo()
+	a = next.(App)
+	if got := strings.Join(blockTexts(a, 0), ","); got != "note:a note,sub:first step,sub:second step" {
+		t.Errorf("after undo: got %q", got)
+	}
+}
+
+// topLevelTitles names the tasks in file order.
+func topLevelTitles(a App) string {
+	var out []string
+	for _, l := range a.taskFile.Lines {
+		if l.Type == storage.LineTask {
+			out = append(out, a.taskFile.Tasks[l.TaskIndex].Title)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+// Undo returns the cursor to the block line it was on, reopening the block --
+// a freshly restored list is folded, so this has to be arranged.
+func TestUndoReturnsToTheBlockLine(t *testing.T) {
+	a := newDeleteApp(t, blockAppFixture)
+	a = selectBlock(t, a, 0, 0)
+	next, _ := a.moveTask(1)
+	a = next.(App)
+
+	next, _ = a.undo()
+	a = next.(App)
+
+	p, i := a.list.SelectedBlockLine()
+	if p != 0 || i != 0 {
+		t.Errorf("expected the cursor back on (0,0), got (%d,%d)", p, i)
 	}
 }

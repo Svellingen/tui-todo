@@ -48,6 +48,7 @@ const (
 	// rather than by name, so it has no constant here.
 	KeyAdd        = "a"
 	KeyAddSubtask = "A"
+	KeyAddNote    = "n"
 	KeyEdit       = "e"
 	KeyDelete     = "x"
 	// KeyStatus is the space bar; bubbletea reports it as a single space.

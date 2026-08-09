@@ -66,11 +66,34 @@ func formatTask(t task.Task) string {
 	return sb.String()
 }
 
+// TaskText renders everything a task line carries after its checkbox: the
+// priority marker, title and metadata. Turning a subtask into a note keeps
+// this much of it.
+func TaskText(t task.Task) string {
+	var sb strings.Builder
+
+	sb.WriteString(PriorityMarker(t.Priority))
+	if t.Priority != task.PriorityNone {
+		sb.WriteByte(' ')
+	}
+	sb.WriteString(t.Title)
+
+	for _, tag := range t.Tags {
+		fmt.Fprintf(&sb, " +%s", tag)
+	}
+	for _, ctx := range t.Contexts {
+		fmt.Fprintf(&sb, " @%s", ctx)
+	}
+	if t.DueDate != nil {
+		fmt.Fprintf(&sb, " due:%s", t.DueDate.Format("2006-01-02"))
+	}
+	return sb.String()
+}
+
 // formatTaskLine renders just the checkbox line for a task.
 func formatTaskLine(t task.Task) string {
 	var sb strings.Builder
 
-	// Checkbox
 	switch t.Status {
 	case task.StatusTodo:
 		sb.WriteString("- [ ] ")
@@ -79,30 +102,7 @@ func formatTaskLine(t task.Task) string {
 	case task.StatusDone:
 		sb.WriteString("- [x] ")
 	}
-
-	// Priority marker, prefixed to the title
-	sb.WriteString(PriorityMarker(t.Priority))
-	if t.Priority != task.PriorityNone {
-		sb.WriteByte(' ')
-	}
-
-	// Title
-	sb.WriteString(t.Title)
-
-	// Tags
-	for _, tag := range t.Tags {
-		fmt.Fprintf(&sb, " +%s", tag)
-	}
-
-	// Contexts keep their own sigil rather than being folded into tags.
-	for _, ctx := range t.Contexts {
-		fmt.Fprintf(&sb, " @%s", ctx)
-	}
-
-	// Due date
-	if t.DueDate != nil {
-		fmt.Fprintf(&sb, " due:%s", t.DueDate.Format("2006-01-02"))
-	}
+	sb.WriteString(TaskText(t))
 
 	return sb.String()
 }

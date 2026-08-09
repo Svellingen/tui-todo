@@ -25,7 +25,7 @@ const (
 // flattened into this level on save.
 type BlockLine struct {
 	// Subtask is set when the line is a checkbox item; otherwise the line is
-	// prose and Note holds its text.
+	// a note and Note holds its text.
 	Subtask *Task
 	Note    string
 }
