@@ -195,8 +195,13 @@ nothing while a heading is selected.
 `a` and `e` open the editor inside the list rather than in a prompt at the
 bottom. `e` takes over the selected task's own row, keeping its status bullet;
 `a` opens a fresh row directly below the selection — under the current task, or
-under the heading when one is selected. `Enter` commits and `Esc` discards,
-leaving the task as it was.
+under the heading when one is selected.
+
+`Enter` commits. `Esc` behaves differently either side: leaving an *edit* keeps
+what you typed — it means "stop editing", not "undo the edit" — while leaving
+an *add* discards it, since there is no earlier text to keep. Clearing a title
+entirely and pressing either key leaves the task as it was rather than saving a
+blank one.
 
 Search (`/`) and the tag prompt (`t`) still appear below the list, since
 neither belongs to a particular row.

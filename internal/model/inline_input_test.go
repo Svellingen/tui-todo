@@ -194,3 +194,64 @@ func TestTypingEnterInNormalModeDoesNotAdd(t *testing.T) {
 		t.Error("a run of runes spelling \"enter\" should not open the editor")
 	}
 }
+
+// Esc out of an edit keeps what was typed: it means "stop editing", not
+// "undo the edit".
+func TestEscKeepsAnEdit(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] original\n")
+	a = moveTo(t, a, "task:original")
+
+	next, _ := a.startEdit()
+	a = next.(App)
+	a = typeRunes(a, " edited")
+
+	next, _ = a.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	a = next.(App)
+
+	if a.mode != modeNormal {
+		t.Error("expected Esc to leave input mode")
+	}
+	if got := a.taskFile.Tasks[0].Title; got != "original edited" {
+		t.Errorf("expected the edit kept, got %q", got)
+	}
+}
+
+// Esc out of an add still discards: there is no prior text to keep.
+func TestEscDiscardsAnAdd(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] original\n")
+	a = moveTo(t, a, "task:original")
+
+	next, _ := a.startAdd()
+	a = next.(App)
+	a = typeRunes(a, "should not exist")
+
+	next, _ = a.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	a = next.(App)
+
+	if len(a.taskFile.Tasks) != 1 {
+		t.Fatalf("expected the add discarded, got %d tasks", len(a.taskFile.Tasks))
+	}
+	for _, tk := range a.taskFile.Tasks {
+		if tk.Title == "should not exist" {
+			t.Error("the abandoned add was kept")
+		}
+	}
+}
+
+// Emptying the title and pressing Esc leaves the task as it was, rather than
+// committing a blank one.
+func TestEscOnAnEmptiedEditKeepsTheOriginal(t *testing.T) {
+	a := newDeleteApp(t, "## Alpha\n- [ ] original\n")
+	a = moveTo(t, a, "task:original")
+
+	next, _ := a.startEdit()
+	a = next.(App)
+	a.input.input.SetValue("")
+
+	next, _ = a.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	a = next.(App)
+
+	if got := a.taskFile.Tasks[0].Title; got != "original" {
+		t.Errorf("expected the original title, got %q", got)
+	}
+}

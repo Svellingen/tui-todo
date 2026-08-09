@@ -514,6 +514,13 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			return a.commitInput()
 		case tea.KeyEsc:
+			// Leaving an edit keeps what was typed, the way leaving insert
+			// mode does: Esc means "stop editing", not "undo the edit".
+			// Adding and the filters still discard, since there is nothing to
+			// keep.
+			if a.input.Mode() == inputEdit {
+				return a.commitInput()
+			}
 			if a.input.Mode() == inputSearch {
 				a.list.ClearSearch()
 			}
